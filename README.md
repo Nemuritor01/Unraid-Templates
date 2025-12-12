@@ -68,14 +68,9 @@ All containers communicate via a custom Docker network and use SWAG reverse prox
 The installation script creates the Docker network, directory structure, and configuration files.
 
 1. Download the script:
-```bash
-wget https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/opencloud_pre_install_script.sh
-```
 
 2. Edit the script and configure your domains:
-```bash
-nano opencloud_pre_install_script.sh
-```
+easiest way is to rename the file to.txt and do the changes with any file explorer.
 
 Update these variables:
 ```bash
@@ -84,11 +79,15 @@ COLLABORA_DOMAIN="collabora.yourdomain.com"
 WOPISERVER_DOMAIN="wopiserver.yourdomain.com"
 ```
 
-3. Make executable and run:
-```bash
-chmod +x opencloud_pre_install_script.sh
-./opencloud_pre_install_script.sh
-```
+3. run the script
+e.g. use plugin "user scripts" from unraid community store.
+- `add new script`
+- `name your script an click "ok" `
+- `click on the cogwheel`
+- `edit script`
+- `copy and paste the code of the pre_installation_script and save`
+- run script
+
 
 ### Step 2: Install Container Templates
 
@@ -98,6 +97,7 @@ chmod +x opencloud_pre_install_script.sh
    - `collaboration.xml`
 
 2. Place them in `/boot/config/plugins/dockerMan/templates-user/`
+the folder is on your flash drive
 
 3. Access Unraid Docker tab and add containers from templates
 
@@ -108,9 +108,9 @@ chmod +x opencloud_pre_install_script.sh
    - `collabora.subdomain.conf`
    - `wopiserver.subdomain.conf`
 
-2. Place in SWAG proxy-confs directory: `/mnt/user/appdata/swag/nginx/proxy-confs/`
+2. Place in SWAG proxy-confs directory (default): `/mnt/user/appdata/swag/nginx/proxy-confs/`
 
-3. Rename files to match your subdomains (remove `.txt` extension if present)
+3. Check and change the subdomains in each file to match yours.
 
 4. Restart SWAG container
 
@@ -146,7 +146,6 @@ chmod +x opencloud_pre_install_script.sh
 #### Network Configuration
 
 - **Network**: `opencloud-net` (custom Docker network)
-- **IP Address**: Assign a static IP (e.g., `172.20.0.2`)
 - **Ports**: 
   - `9200` - HTTP (required)
   - `9233` - NATS registry (required for Collaboration)
@@ -177,7 +176,7 @@ chmod +x opencloud_pre_install_script.sh
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DONT_GEN_SSL_CERT` | `YES` | Don't generate internal SSL (using reverse proxy) |
-| `extra_params` | See template | Collabora configuration parameters |
+| `extra_params` | CHANGE TO YOUR OPENCLOUD DOMAIN | Collabora configuration parameters explained below |
 
 #### Extra Parameters Explained
 
@@ -198,7 +197,6 @@ The `extra_params` variable contains critical settings:
 #### Network Configuration
 
 - **Network**: `opencloud-net`
-- **IP Address**: Static IP (e.g., `172.20.0.3`)
 - **Port**: `9980` - HTTP
 
 ---
@@ -209,7 +207,7 @@ The `extra_params` variable contains critical settings:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `MICRO_REGISTRY_ADDRESS` | OpenCloud container IP:port | `172.20.0.2:9233` |
+| `MICRO_REGISTRY_ADDRESS` | OpenCloud IP:port | e.g.`192.168.x.x:9233` |
 | `COLLABORATION_WOPI_SRC` | Public WOPI server URL | `https://wopiserver.yourdomain.com` |
 | `COLLABORATION_APP_ADDR` | Public Collabora URL | `https://collabora.yourdomain.com` |
 | `OC_URL` | Public OpenCloud URL | `https://opencloud.yourdomain.com` |
@@ -223,7 +221,6 @@ The `extra_params` variable contains critical settings:
 #### Network Configuration
 
 - **Network**: `opencloud-net`
-- **IP Address**: Static IP (e.g., `172.20.0.4`)
 - **Ports**:
   - `9300` - HTTP/WOPI (required)
   - `9301` - gRPC (optional)
@@ -240,7 +237,7 @@ The `extra_params` variable contains critical settings:
 
 ### Custom Docker Network
 
-The deployment uses a custom Docker network for container communication.
+The deployment uses a custom Docker network for container communication. The pre_install script can create the custom network.
 
 #### Network Configuration
 
@@ -248,26 +245,6 @@ The deployment uses a custom Docker network for container communication.
 Network Name: opencloud-net
 Subnet: Auto-assigned by Docker
 ```
-
-#### Container IP Assignment
-
-Assign static IPs to avoid DNS resolution issues:
-
-| Container | Example IP | Port |
-|-----------|------------|------|
-| OpenCloud | `172.20.0.2` | 9200, 9233, 9142 |
-| Collabora | `172.20.0.3` | 9980 |
-| Collaboration | `172.20.0.4` | 9300, 9301 |
-
-**Note**: Use `YourServerIP` placeholders in templates and replace with your actual assigned IPs.
-
-#### Why Static IPs?
-
-- Avoids Docker DNS resolution conflicts
-- Ensures reliable inter-container communication
-- Required for NATS registry connection (OpenCloud ↔ Collaboration)
-
----
 
 ## 🔒 NGINX/SWAG Configuration
 
@@ -279,12 +256,13 @@ Three subdomain configurations are provided:
 2. **collabora.subdomain.conf** - Collabora Online editor
 3. **wopiserver.subdomain.conf** - WOPI protocol server
 
-### Required Changes
+### Possible Required Changes
 
-In each NGINX config file, update:
+If you have issues with the NGINX config files, it´s often, that the container name is not detected.
+Then update:
 
 ```nginx
-set $upstream_app YourServerIP;  # Replace with container IP
+set $upstream_app containername;  # Replace with your server IP
 ```
 
 ### SSL Configuration
