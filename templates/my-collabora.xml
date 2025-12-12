@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Collabora</Name>
+  <Repository>collabora/code:latest</Repository>
+  <Registry>https://hub.docker.com/r/collabora/code</Registry>
+  <Network>opencloud-net</Network>
+  <MyIP/>
+  <Shell>bash</Shell>
+  <Privileged>true</Privileged>
+  <Support>https://www.collaboraonline.com/</Support>
+  <Project>https://www.collaboraoffice.com/</Project>
+  <Overview>Collabora Online - A powerful LibreOffice-based online office suite with collaborative editing, which supports major document, spreadsheet and presentation file formats.</Overview>
+  <Category>Productivity: Tools:</Category>
+  <WebUI>https://collabora.yourdomain.com</WebUI>
+  <TemplateURL/>
+  <Icon>https://avatars.githubusercontent.com/u/22418908?s=200&v=4</Icon>
+  <ExtraParams>--cap-add=MKNOD --entrypoint=/bin/bash</ExtraParams>
+  <PostArgs>-c "coolconfig generate-proof-key &amp;amp;&amp;amp; /start-collabora-online.sh"</PostArgs>
+  <CPUset/>
+  <DateInstalled>1734000000</DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI Port" Target="9980" Default="9980" Mode="tcp" Description="Collabora HTTP Port" Type="Port" Display="always" Required="true" Mask="false">9980</Config>
+  <Config Name="aliasgroup1" Target="aliasgroup1" Default="https://wopiserver.yourdomain.com:443" Mode="" Description="WOPI server domain with port" Type="Variable" Display="always" Required="true" Mask="false">https://wopiserver.yourdomain.com:443</Config>
+  <Config Name="username" Target="username" Default="admin" Mode="" Description="Admin username for Collabora" Type="Variable" Display="always" Required="true" Mask="false">admin</Config>
+  <Config Name="password" Target="password" Default="" Mode="" Description="Admin password for Collabora" Type="Variable" Display="always" Required="true" Mask="true">YourSecurePassword</Config>
+  <Config Name="DONT_GEN_SSL_CERT" Target="DONT_GEN_SSL_CERT" Default="YES" Mode="" Description="Don't generate SSL certificates (using external proxy)" Type="Variable" Display="advanced" Required="false" Mask="false">YES</Config>
+  <Config Name="extra_params" Target="extra_params" Default="--o:ssl.enable=false --o:ssl.ssl_verification=false --o:ssl.termination=true --o:welcome.enable=false --o:net.frame_ancestors=opencloud.yourdomain.com --o:net.lok_allow.host[14]=opencloud.yourdomain.com --o:home_mode.enable=false" Mode="" Description="Extra Collabora parameters (multiline supported)" Type="Variable" Display="advanced" Required="false" Mask="false">--o:ssl.enable=false --o:ssl.ssl_verification=false --o:ssl.termination=true --o:welcome.enable=false --o:net.frame_ancestors=opencloud.yourdomain.com --o:net.lok_allow.host[14]=opencloud.yourdomain.com --o:home_mode.enable=false</Config>
+  <Config Name="TrueType Fonts 1" Target="/usr/share/fonts/truetype/more" Default="/usr/share/fonts/truetype" Mode="ro" Description="Host TrueType fonts directory" Type="Path" Display="advanced" Required="false" Mask="false">/usr/share/fonts/truetype</Config>
+  <Config Name="TrueType Fonts 2" Target="/opt/cool/systemplate/usr/share/fonts/truetype/more" Default="/usr/share/fonts/truetype" Mode="ro" Description="System template TrueType fonts" Type="Path" Display="advanced" Required="false" Mask="false">/usr/share/fonts/truetype</Config>
+  <TailscaleStateDir/>
+</Container>
