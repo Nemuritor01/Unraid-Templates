@@ -267,7 +267,7 @@ Three subdomain configurations are provided:
 
 1. **opencloud.subdomain.conf** - Main OpenCloud interface
 2. **collabora.subdomain.conf** - Collabora Online editor
-3. **wopiserver.subdomain.conf** - WOPI protocol server
+3. **collaboration.subdomain.conf** - WOPI protocol server
 
 ### Possible Required Changes
 
