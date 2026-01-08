@@ -14,6 +14,9 @@
 # Collabora Integration
 ENABLE_COLLABORA="true"
 
+# Radicale Integration (CalDAV/CardDAV)
+ENABLE_RADICALE="true"
+
 # Docker Network Configuration
 CUSTOM_NETWORK="true"
 NETWORK_NAME="opencloud-net"
@@ -26,6 +29,7 @@ WOPISERVER_DOMAIN="wopiserver.yourdomain.com"
 # Installation Paths
 OCL_BASE="/mnt/user/appdata/opencloud"
 COL_BASE="/mnt/user/appdata/collabora"
+RAD_BASE="/mnt/user/appdata/radicale"
 
 ################################################################################
 # SCRIPT START
@@ -36,6 +40,8 @@ OCL_DATA="${OCL_BASE}/data"
 OCL_APPS="${OCL_BASE}/apps"
 COL_CONFIG="${COL_BASE}/config"
 COLLAB_CONFIG="${OCL_BASE}/collaboration"
+RAD_CONFIG="${RAD_BASE}/config"
+RAD_DATA="${RAD_BASE}/data"
 
 GITHUB_BASE="https://raw.githubusercontent.com/opencloud-eu/opencloud-compose/main"
 BANNED_PW_URL="${GITHUB_BASE}/config/opencloud/banned-password-list.txt"
@@ -47,6 +53,9 @@ echo "  OCIS Domain:    ${OCIS_DOMAIN}"
 if [ "${ENABLE_COLLABORA}" = "true" ]; then
     echo "  Collabora:      ${COLLABORA_DOMAIN}"
     echo "  WOPI Server:    ${WOPISERVER_DOMAIN}"
+fi
+if [ "${ENABLE_RADICALE}" = "true" ]; then
+    echo "  Radicale:       Enabled (CalDAV/CardDAV)"
 fi
 echo "  Install path:   ${OCL_BASE}"
 if [ "${CUSTOM_NETWORK}" = "true" ]; then
@@ -108,6 +117,11 @@ mkdir -p "${OCL_APPS}"
 if [ "${ENABLE_COLLABORA}" = "true" ]; then
     mkdir -p "${COL_CONFIG}"
     mkdir -p "${COLLAB_CONFIG}"
+fi
+
+if [ "${ENABLE_RADICALE}" = "true" ]; then
+    mkdir -p "${RAD_CONFIG}"
+    mkdir -p "${RAD_DATA}"
 fi
 
 echo "✓ Directories created successfully"
@@ -243,6 +257,107 @@ EOF
 
 echo "✓ Banned password list created successfully"
 
+################################################################################
+# Create Radicale Configuration Files
+################################################################################
+
+if [ "${ENABLE_RADICALE}" = "true" ]; then
+    echo ""
+    echo "[$([ "${CUSTOM_NETWORK}" = "true" ] && echo "4.5" || echo "3.5")/$([ "${CUSTOM_NETWORK}" = "true" ] && echo "5" || echo "4")] Creating Radicale configuration files..."
+    
+    # Create proxy.yaml for OpenCloud
+    cat > "${OCL_CONFIG}/proxy.yaml" <<'EOF'
+# OpenCloud Proxy Configuration with Radicale Integration
+# This adds four additional routes to the proxy, forwarding requests on
+# '/carddav/', '/caldav/' and the respective '/.well-known' endpoints
+# to the Radicale container and setting the required headers.
+
+additional_policies:
+  - name: default
+    routes:
+      # CalDAV endpoints
+      - endpoint: /caldav/
+        backend: http://radicale:5232
+        remote_user_header: X-Remote-User
+        skip_x_access_token: true
+        additional_headers:
+          - X-Script-Name: /caldav
+          
+      - endpoint: /.well-known/caldav
+        backend: http://radicale:5232
+        remote_user_header: X-Remote-User
+        skip_x_access_token: true
+        additional_headers:
+          - X-Script-Name: /caldav
+          
+      # CardDAV endpoints
+      - endpoint: /carddav/
+        backend: http://radicale:5232
+        remote_user_header: X-Remote-User
+        skip_x_access_token: true
+        additional_headers:
+          - X-Script-Name: /carddav
+          
+      - endpoint: /.well-known/carddav
+        backend: http://radicale:5232
+        remote_user_header: X-Remote-User
+        skip_x_access_token: true
+        additional_headers:
+          - X-Script-Name: /carddav
+EOF
+    
+    # Create Radicale config file
+    cat > "${RAD_CONFIG}/config" <<'EOF'
+# Radicale configuration file for OpenCloud integration
+
+[server]
+hosts = 0.0.0.0:5232
+max_content_length = 10485760
+timeout = 30
+
+[encoding]
+request = utf-8
+stock = utf-8
+
+[auth]
+# Use http_x_remote_user for OpenCloud reverse proxy authentication
+type = http_x_remote_user
+
+[rights]
+type = from_file
+file = /config/rights
+
+[storage]
+type = multifilesystem
+filesystem_folder = /data
+
+[web]
+type = none
+
+[logging]
+level = info
+mask_passwords = True
+EOF
+    
+    # Create Radicale rights file
+    cat > "${RAD_CONFIG}/rights" <<'EOF'
+# Radicale rights configuration
+# Allow authenticated users to access their own collections
+
+[owner-access]
+user = .+
+collection = {user}(/.+)?
+permissions = RrWw
+
+[root-access]
+user = .+
+collection = {user}
+permissions = RrWw
+EOF
+    
+    echo "✓ Radicale configuration files created successfully"
+fi
+
 # Verify files were created correctly
 echo ""
 echo "Verifying configuration files..."
@@ -260,6 +375,29 @@ if [ -f "${OCL_CONFIG}/banned-password-list.txt" ]; then
 else
     echo "  ❌ ERROR: banned-password-list.txt is not a file!"
     FILE_CHECK_PASSED=false
+fi
+
+if [ "${ENABLE_RADICALE}" = "true" ]; then
+    if [ -f "${OCL_CONFIG}/proxy.yaml" ]; then
+        echo "  ✓ proxy.yaml is a file"
+    else
+        echo "  ❌ ERROR: proxy.yaml is not a file!"
+        FILE_CHECK_PASSED=false
+    fi
+    
+    if [ -f "${RAD_CONFIG}/config" ]; then
+        echo "  ✓ radicale config is a file"
+    else
+        echo "  ❌ ERROR: radicale config is not a file!"
+        FILE_CHECK_PASSED=false
+    fi
+    
+    if [ -f "${RAD_CONFIG}/rights" ]; then
+        echo "  ✓ radicale rights is a file"
+    else
+        echo "  ❌ ERROR: radicale rights is not a file!"
+        FILE_CHECK_PASSED=false
+    fi
 fi
 
 if [ "${FILE_CHECK_PASSED}" = "false" ]; then
@@ -284,6 +422,11 @@ if [ "${ENABLE_COLLABORA}" = "true" ]; then
     chmod -R 755 "${COL_BASE}"
 fi
 
+if [ "${ENABLE_RADICALE}" = "true" ]; then
+    chown -R 1000:1000 "${RAD_BASE}"
+    chmod -R 755 "${RAD_BASE}"
+fi
+
 echo "✓ Permissions set successfully"
 
 ################################################################################
@@ -305,6 +448,11 @@ fi
 echo "Configuration Files:"
 echo "  ✓ ${OCL_CONFIG}/csp.yaml"
 echo "  ✓ ${OCL_CONFIG}/banned-password-list.txt"
+if [ "${ENABLE_RADICALE}" = "true" ]; then
+    echo "  ✓ ${OCL_CONFIG}/proxy.yaml"
+    echo "  ✓ ${RAD_CONFIG}/config"
+    echo "  ✓ ${RAD_CONFIG}/rights"
+fi
 echo ""
 
 echo "Directories:"
@@ -314,6 +462,10 @@ echo "  ✓ ${OCL_APPS}/ (apps)"
 if [ "${ENABLE_COLLABORA}" = "true" ]; then
     echo "  ✓ ${COL_CONFIG}/ (collabora config)"
     echo "  ✓ ${COLLAB_CONFIG}/ (collaboration)"
+fi
+if [ "${ENABLE_RADICALE}" = "true" ]; then
+    echo "  ✓ ${RAD_CONFIG}/ (radicale config)"
+    echo "  ✓ ${RAD_DATA}/ (radicale data)"
 fi
 echo ""
 
@@ -326,6 +478,9 @@ if [ "${ENABLE_COLLABORA}" = "true" ]; then
     echo "   - Collabora: https://${COLLABORA_DOMAIN}"
     echo "   - WOPI Server: https://${WOPISERVER_DOMAIN}"
 fi
+if [ "${ENABLE_RADICALE}" = "true" ]; then
+    echo "   - Radicale: Integrated (no separate domain needed)"
+fi
 echo ""
 echo "2. Update YourServerIP in templates with your container IPs"
 echo ""
@@ -333,16 +488,33 @@ echo "3. Set a secure admin password (replace YourSecurePassword)"
 echo ""
 echo "4. Ensure all containers use the '${NETWORK_NAME}' network"
 echo ""
-echo "5. Start containers in this order:"
+if [ "${ENABLE_RADICALE}" = "true" ]; then
+    echo "5. Add proxy.yaml mount to OpenCloud template:"
+    echo "   Container Path: /etc/opencloud/proxy.yaml"
+    echo "   Host Path: ${OCL_CONFIG}/proxy.yaml"
+    echo "   Access Mode: Read/Write"
+    echo ""
+fi
+echo "$([ "${ENABLE_RADICALE}" = "true" ] && echo "6" || echo "5"). Start containers in this order:"
 echo "   a) OpenCloud (wait for initialization)"
-echo "   b) Collabora (wait for ready status)"
-echo "   c) Collaboration (connects to both)"
+if [ "${ENABLE_COLLABORA}" = "true" ]; then
+    echo "   b) Collabora (wait for ready status)"
+    echo "   c) Collaboration (connects to both)"
+fi
+if [ "${ENABLE_RADICALE}" = "true" ]; then
+    echo "   $([ "${ENABLE_COLLABORA}" = "true" ] && echo "d" || echo "b")) Radicale (after OpenCloud is ready)"
+fi
 echo ""
-echo "6. Verify setup:"
+echo "$([ "${ENABLE_RADICALE}" = "true" ] && echo "7" || echo "6"). Verify setup:"
 echo "   - OpenCloud UI: https://${OCIS_DOMAIN}"
 if [ "${ENABLE_COLLABORA}" = "true" ]; then
     echo "   - Collabora UI: https://${COLLABORA_DOMAIN}"
     echo "   - Test document editing in OpenCloud"
+fi
+if [ "${ENABLE_RADICALE}" = "true" ]; then
+    echo "   - CalDAV URL: https://${OCIS_DOMAIN}/caldav/"
+    echo "   - CardDAV URL: https://${OCIS_DOMAIN}/carddav/"
+    echo "   - Use OpenCloud app tokens for CalDAV/CardDAV client auth"
 fi
 echo ""
 echo "================================================"
@@ -352,6 +524,9 @@ echo "  docker logs opencloud"
 if [ "${ENABLE_COLLABORA}" = "true" ]; then
     echo "  docker logs collabora"
     echo "  docker logs collaboration"
+fi
+if [ "${ENABLE_RADICALE}" = "true" ]; then
+    echo "  docker logs radicale"
 fi
 echo ""
 echo "================================================"
