@@ -17,7 +17,7 @@
   <ExtraParams>--entrypoint=/bin/sh</ExtraParams>
   <PostArgs>-c "opencloud init || true; opencloud server"</PostArgs>
   <CPUset/>
-  <DateInstalled>1734000000</DateInstalled>
+  </DateInstalled>
   <DonateText/>
   <DonateLink/>
   <Requires/>
@@ -29,6 +29,7 @@
   <Config Name="OC_INSECURE" Target="OC_INSECURE" Default="true" Mode="" Description="Skip certificate validation" Type="Variable" Display="always" Required="true" Mask="false">true</Config>
   <Config Name="PROXY_HTTP_ADDR" Target="PROXY_HTTP_ADDR" Default="0.0.0.0:9200" Mode="" Description="HTTP listening address" Type="Variable" Display="always" Required="true" Mask="false">0.0.0.0:9200</Config>
   <Config Name="OC_URL" Target="OC_URL" Default="https://opencloud.yourdomain.com" Mode="" Description="OpenCloud public URL" Type="Variable" Display="always" Required="true" Mask="false">https://opencloud.yourdomain.com</Config>
+  <Config Name="Radicale Proxy Config File" Target="/etc/opencloud/proxy.yaml" Default="" Mode="rw" Description="" Type="Path" Display="advanced" Required="false" Mask="false">/mnt/user/appdata/opencloud/config/proxy.yaml</Config>	
   <Config Name="Micro-Registry-Address" Target="9233" Default="9233" Mode="tcp" Description="NATS registry port" Type="Port" Display="advanced" Required="false" Mask="false">9233</Config>
   <Config Name="GATEWAY_GRPC_PORT" Target="9142" Default="9142" Mode="tcp" Description="Gateway gRPC port" Type="Port" Display="advanced" Required="false" Mask="false">9142</Config>
   <Config Name="COLLABORA_DOMAIN" Target="COLLABORA_DOMAIN" Default="collabora.yourdomain.com" Mode="" Description="Collabora Online domain" Type="Variable" Display="advanced" Required="false" Mask="false">collabora.yourdomain.com</Config>
