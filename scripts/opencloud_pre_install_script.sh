@@ -32,7 +32,7 @@ COL_BASE="/mnt/user/appdata/collabora"
 RAD_BASE="/mnt/user/appdata/radicale"
 
 ################################################################################
-# SCRIPT START
+# SCRIPT START - DON'T CHANGE BELOW CODE !!!
 ################################################################################
 
 OCL_CONFIG="${OCL_BASE}/config"
