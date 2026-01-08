@@ -54,6 +54,7 @@
    OCIS_DOMAIN="opencloud.yourdomain.com"
    COLLABORA_DOMAIN="collabora.yourdomain.com"
    WOPISERVER_DOMAIN="wopiserver.yourdomain.com"
+   
    # Installation Paths
    OCL_BASE="/mnt/user/appdata/opencloud"
    COL_BASE="/mnt/user/appdata/collabora"
