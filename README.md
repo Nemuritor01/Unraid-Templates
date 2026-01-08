@@ -128,7 +128,7 @@ For each template, update these key settings:
 
 #### Collaboration Container
 - **Network:** `opencloud-net`
-- **MICRO_REGISTRY_ADDRESS:** OpenCloud container IP:9233 (e.g., `10.10.20.10:9233`)
+- **MICRO_REGISTRY_ADDRESS:** OpenCloud container IP:9233 (e.g., `192.168.178.10:9233`)
 - **COLLABORATION_WOPI_SRC:** `https://wopiserver.yourdomain.com`
 - **COLLABORATION_APP_ADDR:** `https://collabora.yourdomain.com`
 - **OC_URL:** `https://opencloud.yourdomain.com`
