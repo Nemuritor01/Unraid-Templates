@@ -54,8 +54,12 @@
    OCIS_DOMAIN="opencloud.yourdomain.com"
    COLLABORA_DOMAIN="collabora.yourdomain.com"
    WOPISERVER_DOMAIN="wopiserver.yourdomain.com"
+   # Installation Paths
+   OCL_BASE="/mnt/user/appdata/opencloud"
+   COL_BASE="/mnt/user/appdata/collabora"
+   RAD_BASE="/mnt/user/appdata/radicale"
    ```
-6. Click `Run Script` → `Run in Background`
+6. Click `Run Script` → `Run`
 7. Check output: `View Log` to verify success
 
 ### Step 2: Configure SWAG Proxy
@@ -65,19 +69,19 @@ Copy the three configuration files to your SWAG container:
 1. **OpenCloud config:**
    ```bash
    # Copy to: /mnt/user/appdata/swag/nginx/proxy-confs/
-   opencloud.conf.txt → opencloud.subdomain.conf
+   opencloud.conf → opencloud.subdomain.conf
    ```
 
 2. **Collabora config:**
    ```bash
    # Copy to: /mnt/user/appdata/swag/nginx/proxy-confs/
-   collabora.conf.txt → collabora.subdomain.conf
+   collabora.conf → collabora.subdomain.conf
    ```
 
 3. **WOPI Server config:**
    ```bash
    # Copy to: /mnt/user/appdata/swag/nginx/proxy-confs/
-   collaboration.conf.txt → wopiserver.subdomain.conf
+   collaboration.conf → wopiserver.subdomain.conf
    ```
 
 4. **Restart SWAG:**
