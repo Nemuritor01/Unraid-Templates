@@ -17,7 +17,7 @@
   <ExtraParams/>
   <PostArgs>--config /config/config</PostArgs>
   <CPUset/>
-  </DateInstalled>
+  <DateInstalled>1734000000</DateInstalled>
   <DonateText/>
   <DonateLink/>
   <Requires>Requires OpenCloud container to be running first. Configure proxy.yaml in OpenCloud for Radicale integration.</Requires>
