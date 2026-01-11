@@ -32,7 +32,7 @@ COL_BASE="/mnt/user/appdata/collabora"
 RAD_BASE="/mnt/user/appdata/radicale"
 
 ################################################################################
-# SCRIPT START - DON'T CHANGE BELOW CODE !!!
+# SCRIPT START
 ################################################################################
 
 OCL_CONFIG="${OCL_BASE}/config"
@@ -306,56 +306,34 @@ additional_policies:
           - X-Script-Name: /carddav
 EOF
     
-    # Create Radicale config file
+    # Create Radicale config file (minimal - matches official OpenCloud template)
     cat > "${RAD_CONFIG}/config" <<'EOF'
 # Radicale configuration file for OpenCloud integration
 
 [server]
 hosts = 0.0.0.0:5232
-max_content_length = 10485760
-timeout = 30
-
-[encoding]
-request = utf-8
-stock = utf-8
 
 [auth]
-# Use http_x_remote_user for OpenCloud reverse proxy authentication
 type = http_x_remote_user
 
-[rights]
-type = from_file
-file = /config/rights
-
 [storage]
-type = multifilesystem
-filesystem_folder = /data
+predefined_collections = {
+    "def-addressbook": {
+       "D:displayname": "Personal Address Book",
+       "tag": "VADDRESSBOOK"
+    },
+    "def-calendar": {
+       "C:supported-calendar-component-set": "VEVENT,VJOURNAL,VTODO",
+       "D:displayname": "Personal Calendar",
+       "tag": "VCALENDAR"
+    }
+  }
 
 [web]
 type = none
-
-[logging]
-level = info
-mask_passwords = True
 EOF
     
-    # Create Radicale rights file
-    cat > "${RAD_CONFIG}/rights" <<'EOF'
-# Radicale rights configuration
-# Allow authenticated users to access their own collections
-
-[owner-access]
-user = .+
-collection = {user}(/.+)?
-permissions = RrWw
-
-[root-access]
-user = .+
-collection = {user}
-permissions = RrWw
-EOF
-    
-    echo "✓ Radicale configuration files created successfully"
+    echo "✓ Radicale configuration file created successfully"
 fi
 
 # Verify files were created correctly
@@ -389,13 +367,6 @@ if [ "${ENABLE_RADICALE}" = "true" ]; then
         echo "  ✓ radicale config is a file"
     else
         echo "  ❌ ERROR: radicale config is not a file!"
-        FILE_CHECK_PASSED=false
-    fi
-    
-    if [ -f "${RAD_CONFIG}/rights" ]; then
-        echo "  ✓ radicale rights is a file"
-    else
-        echo "  ❌ ERROR: radicale rights is not a file!"
         FILE_CHECK_PASSED=false
     fi
 fi
@@ -451,7 +422,6 @@ echo "  ✓ ${OCL_CONFIG}/banned-password-list.txt"
 if [ "${ENABLE_RADICALE}" = "true" ]; then
     echo "  ✓ ${OCL_CONFIG}/proxy.yaml"
     echo "  ✓ ${RAD_CONFIG}/config"
-    echo "  ✓ ${RAD_CONFIG}/rights"
 fi
 echo ""
 
