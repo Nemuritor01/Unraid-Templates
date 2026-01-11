@@ -17,6 +17,11 @@ ENABLE_COLLABORA="true"
 # Radicale Integration (CalDAV/CardDAV)
 ENABLE_RADICALE="true"
 
+# Radicale Web UI (set to "true" to enable the web interface)
+# Note: Web UI is accessible at https://yourdomain.com/caldav/.web/
+# WARNING: Web UI has its own authentication - keep disabled for security unless needed
+ENABLE_RADICALE_WEBUI="false"
+
 # Docker Network Configuration
 CUSTOM_NETWORK="true"
 NETWORK_NAME="opencloud-net"
@@ -56,6 +61,9 @@ if [ "${ENABLE_COLLABORA}" = "true" ]; then
 fi
 if [ "${ENABLE_RADICALE}" = "true" ]; then
     echo "  Radicale:       Enabled (CalDAV/CardDAV)"
+    if [ "${ENABLE_RADICALE_WEBUI}" = "true" ]; then
+        echo "  Radicale Web UI: Enabled"
+    fi
 fi
 echo "  Install path:   ${OCL_BASE}"
 if [ "${CUSTOM_NETWORK}" = "true" ]; then
@@ -266,9 +274,11 @@ if [ "${ENABLE_RADICALE}" = "true" ]; then
     echo "[$([ "${CUSTOM_NETWORK}" = "true" ] && echo "4.5" || echo "3.5")/$([ "${CUSTOM_NETWORK}" = "true" ] && echo "5" || echo "4")] Creating Radicale configuration files..."
     
     # Create proxy.yaml for OpenCloud
-    cat > "${OCL_CONFIG}/proxy.yaml" <<'EOF'
+    if [ "${ENABLE_RADICALE_WEBUI}" = "true" ]; then
+        # Include Web UI route UNCOMMENTED (enabled)
+        cat > "${OCL_CONFIG}/proxy.yaml" <<'EOF'
 # OpenCloud Proxy Configuration with Radicale Integration
-# This adds four additional routes to the proxy, forwarding requests on
+# This adds routes to the proxy, forwarding requests on
 # '/carddav/', '/caldav/' and the respective '/.well-known' endpoints
 # to the Radicale container and setting the required headers.
 
@@ -304,10 +314,102 @@ additional_policies:
         skip_x_access_token: true
         additional_headers:
           - X-Script-Name: /carddav
+
+      # Radicale Web UI
+      # "unprotected" is True because the Web UI itself asks for password.
+      # Also requires [web] type = "internal" in radicale config
+      - endpoint: /caldav/.web/
+        backend: http://radicale:5232/
+        unprotected: true
+        skip_x_access_token: true
+        additional_headers:
+          - X-Script-Name: /caldav
 EOF
+    else
+        # Include Web UI route COMMENTED OUT (disabled, but shown as documentation)
+        cat > "${OCL_CONFIG}/proxy.yaml" <<'EOF'
+# OpenCloud Proxy Configuration with Radicale Integration
+# This adds routes to the proxy, forwarding requests on
+# '/carddav/', '/caldav/' and the respective '/.well-known' endpoints
+# to the Radicale container and setting the required headers.
+
+additional_policies:
+  - name: default
+    routes:
+      # CalDAV endpoints
+      - endpoint: /caldav/
+        backend: http://radicale:5232
+        remote_user_header: X-Remote-User
+        skip_x_access_token: true
+        additional_headers:
+          - X-Script-Name: /caldav
+          
+      - endpoint: /.well-known/caldav
+        backend: http://radicale:5232
+        remote_user_header: X-Remote-User
+        skip_x_access_token: true
+        additional_headers:
+          - X-Script-Name: /caldav
+          
+      # CardDAV endpoints
+      - endpoint: /carddav/
+        backend: http://radicale:5232
+        remote_user_header: X-Remote-User
+        skip_x_access_token: true
+        additional_headers:
+          - X-Script-Name: /carddav
+          
+      - endpoint: /.well-known/carddav
+        backend: http://radicale:5232
+        remote_user_header: X-Remote-User
+        skip_x_access_token: true
+        additional_headers:
+          - X-Script-Name: /carddav
+
+      # To enable the Radicale Web UI, uncomment this rule and set
+      # ENABLE_RADICALE_WEBUI="true" in the script configuration.
+      # "unprotected" is True because the Web UI itself asks for password.
+      # Also set [web] type = "internal" in radicale config
+      #- endpoint: /caldav/.web/
+      #  backend: http://radicale:5232/
+      #  unprotected: true
+      #  skip_x_access_token: true
+      #  additional_headers:
+      #    - X-Script-Name: /caldav
+EOF
+    fi
     
     # Create Radicale config file (minimal - matches official OpenCloud template)
-    cat > "${RAD_CONFIG}/config" <<'EOF'
+    if [ "${ENABLE_RADICALE_WEBUI}" = "true" ]; then
+        # Config with Web UI enabled
+        cat > "${RAD_CONFIG}/config" <<'EOF'
+# Radicale configuration file for OpenCloud integration
+
+[server]
+hosts = 0.0.0.0:5232
+
+[auth]
+type = http_x_remote_user
+
+[storage]
+predefined_collections = {
+    "def-addressbook": {
+       "D:displayname": "Personal Address Book",
+       "tag": "VADDRESSBOOK"
+    },
+    "def-calendar": {
+       "C:supported-calendar-component-set": "VEVENT,VJOURNAL,VTODO",
+       "D:displayname": "Personal Calendar",
+       "tag": "VCALENDAR"
+    }
+  }
+
+[web]
+type = internal
+EOF
+    else
+        # Config with Web UI disabled (default)
+        cat > "${RAD_CONFIG}/config" <<'EOF'
 # Radicale configuration file for OpenCloud integration
 
 [server]
@@ -332,8 +434,9 @@ predefined_collections = {
 [web]
 type = none
 EOF
+    fi
     
-    echo "✓ Radicale configuration file created successfully"
+    echo "✓ Radicale configuration files created successfully"
 fi
 
 # Verify files were created correctly
@@ -484,6 +587,10 @@ fi
 if [ "${ENABLE_RADICALE}" = "true" ]; then
     echo "   - CalDAV URL: https://${OCIS_DOMAIN}/caldav/"
     echo "   - CardDAV URL: https://${OCIS_DOMAIN}/carddav/"
+    if [ "${ENABLE_RADICALE_WEBUI}" = "true" ]; then
+        echo "   - Radicale Web UI: https://${OCIS_DOMAIN}/caldav/.web/"
+        echo "     (Uses separate Radicale authentication)"
+    fi
     echo "   - Use OpenCloud app tokens for CalDAV/CardDAV client auth"
 fi
 echo ""
