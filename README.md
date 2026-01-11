@@ -103,12 +103,6 @@ Copy the three configuration files to your SWAG container:
    /boot/config/plugins/dockerMan/templates-user/
    ```
 
-3. **Or add via Docker page:**
-   - Go to `Docker` tab
-   - Click `Add Container`
-   - Template: `Custom`
-   - Click `XML` button and paste template content
-
 ### Step 4: Configure Templates
 
 For each template, update these key settings:
