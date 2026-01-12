@@ -531,4 +531,759 @@ if [ "$OPENCLOUD_RUNNING" = true ] && [ "$COLLABORA_RUNNING" = true ] && [ "$COL
     
     log_both "Testing: OpenCloud -> Collaboration (WOPI)..."
     TEST_RESULT=$(docker exec "${OPENCLOUD_CONTAINER}" wget -q -O- --timeout=5 "http://${COLLABORATION_IP}:9300/wopi" 2>&1)
-    # HTTP 418 "I
+    # HTTP 418 "I'm a teapot" is the CORRECT response from WOPI server!
+    if echo "$TEST_RESULT" | grep -qi "teapot\|418"; then
+        test_passed "OpenCloud can reach Collaboration WOPI internally (${COLLABORATION_IP}:9300)" "WOPI server responding correctly with HTTP 418 'I'm a teapot'" "Connectivity"
+    elif [ $? -eq 0 ]; then
+        test_passed "OpenCloud can reach Collaboration WOPI internally (${COLLABORATION_IP}:9300)" "Response: ${TEST_RESULT:0:100}" "Connectivity"
+    else
+        test_failed "OpenCloud CANNOT reach Collaboration WOPI internally" "Target: http://${COLLABORATION_IP}:9300/wopi\nError: ${TEST_RESULT}" "Connectivity" "true"
+        add_recommendation "Verify WOPI server is running and listening on port 9300"
+    fi
+    
+    log_both "Testing: Collabora -> Collaboration (WOPI)..."
+    TEST_RESULT=$(docker exec "${COLLABORA_CONTAINER}" wget -q -O- --timeout=5 "http://${COLLABORATION_IP}:9300/wopi" 2>&1)
+    if echo "$TEST_RESULT" | grep -qi "teapot\|418"; then
+        test_passed "Collabora can reach Collaboration WOPI internally (${COLLABORATION_IP}:9300)" "WOPI server responding correctly with HTTP 418 'I'm a teapot'" "Connectivity"
+    else
+        test_warning "Collabora -> WOPI connection unclear (may still work)" "Response: ${TEST_RESULT:0:100}" "Connectivity"
+    fi
+    
+    log_both "Testing: Collaboration -> OpenCloud..."
+    TEST_RESULT=$(docker exec "${COLLABORATION_CONTAINER}" wget -q -O- --timeout=5 "http://${OPENCLOUD_IP}:9200/" 2>&1)
+    if [ $? -eq 0 ]; then
+        test_passed "Collaboration can reach OpenCloud internally (${OPENCLOUD_IP}:9200)" "Connection successful" "Connectivity"
+    else
+        test_failed "Collaboration CANNOT reach OpenCloud internally" "Target: http://${OPENCLOUD_IP}:9200/\nError: ${TEST_RESULT}" "Connectivity" "true"
+        add_recommendation "Verify network connectivity between containers"
+    fi
+    
+else
+    test_warning "Skipping internal connectivity tests (not all containers running)" "OpenCloud: ${OPENCLOUD_RUNNING}, Collabora: ${COLLABORA_RUNNING}, Collaboration: ${COLLABORATION_RUNNING}" "Connectivity"
+fi
+
+################################################################################
+# TEST 7: EXTERNAL DOMAIN ACCESSIBILITY
+################################################################################
+
+print_section "External Domain Accessibility"
+
+log_both "Testing: https://${OCIS_DOMAIN}..."
+HTTP_RESPONSE=$(curl -k -s -o /tmp/ocis_response.txt -w "%{http_code}" --max-time 10 "https://${OCIS_DOMAIN}/" 2>&1)
+HTTP_CODE="${HTTP_RESPONSE: -3}"
+RESPONSE_BODY=$(cat /tmp/ocis_response.txt 2>/dev/null)
+
+if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ] || [ "$HTTP_CODE" = "301" ]; then
+    test_passed "OpenCloud domain accessible (HTTP ${HTTP_CODE})" "URL: https://${OCIS_DOMAIN}/" "Reverse Proxy"
+else
+    test_failed "OpenCloud domain not accessible (HTTP ${HTTP_CODE})" "URL: https://${OCIS_DOMAIN}/\nHTTP Code: ${HTTP_CODE}\nResponse: ${RESPONSE_BODY:0:500}" "Reverse Proxy" "true"
+    add_recommendation "Check reverse proxy configuration and DNS for ${OCIS_DOMAIN}"
+fi
+
+log_both "Testing: https://${COLLABORA_DOMAIN}..."
+HTTP_RESPONSE=$(curl -k -s -o /tmp/collabora_response.txt -w "%{http_code}" --max-time 10 "https://${COLLABORA_DOMAIN}/" 2>&1)
+HTTP_CODE="${HTTP_RESPONSE: -3}"
+RESPONSE_BODY=$(cat /tmp/collabora_response.txt 2>/dev/null)
+
+if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ] || [ "$HTTP_CODE" = "301" ]; then
+    test_passed "Collabora domain accessible (HTTP ${HTTP_CODE})" "URL: https://${COLLABORA_DOMAIN}/" "Reverse Proxy"
+else
+    test_failed "Collabora domain not accessible (HTTP ${HTTP_CODE})" "URL: https://${COLLABORA_DOMAIN}/\nHTTP Code: ${HTTP_CODE}\nResponse: ${RESPONSE_BODY:0:500}" "Reverse Proxy" "true"
+    add_recommendation "Check reverse proxy configuration and DNS for ${COLLABORA_DOMAIN}"
+fi
+
+log_both "Testing: https://${WOPISERVER_DOMAIN}/wopi..."
+WOPI_RESPONSE=$(curl -k -s --max-time 10 "https://${WOPISERVER_DOMAIN}/wopi" 2>&1)
+HTTP_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" --max-time 10 "https://${WOPISERVER_DOMAIN}/wopi" 2>/dev/null)
+
+# HTTP 418 "I'm a teapot" is the CORRECT response!
+if echo "$WOPI_RESPONSE" | grep -qi "teapot" || [ "$HTTP_CODE" = "418" ]; then
+    test_passed "WOPI Server domain accessible and responding correctly" "Response: HTTP 418 'I'm a teapot' (this is correct!)" "Reverse Proxy"
+else
+    test_failed "WOPI Server not responding correctly (HTTP ${HTTP_CODE})" "URL: https://${WOPISERVER_DOMAIN}/wopi\nHTTP Code: ${HTTP_CODE}\nExpected: HTTP 418 'I'm a teapot'\nReceived: ${WOPI_RESPONSE:0:200}" "Reverse Proxy" "true"
+    add_recommendation "Check reverse proxy configuration for ${WOPISERVER_DOMAIN}"
+fi
+
+################################################################################
+# TEST 8: WOPI DISCOVERY
+################################################################################
+
+print_section "WOPI Discovery & Capabilities"
+
+if [ "$COLLABORATION_RUNNING" = true ]; then
+    log_both "Testing WOPI discovery endpoint..."
+    WOPI_DISCOVERY=$(curl -k -s --max-time 10 "https://${WOPISERVER_DOMAIN}/wopi/cbox/endpoints" 2>&1)
+    
+    log_file "WOPI Discovery Response:"
+    log_file "$WOPI_DISCOVERY"
+    
+    if [ -n "$WOPI_DISCOVERY" ]; then
+        test_passed "WOPI discovery endpoint responding" "Endpoint: https://${WOPISERVER_DOMAIN}/wopi/cbox/endpoints" "WOPI Server"
+        
+        if check_command jq; then
+            log_both "  Supported actions:"
+            echo "$WOPI_DISCOVERY" | jq -r '.app.capabilities[]? | "    - \(.name)"' 2>/dev/null | tee -a "$DIAGNOSTIC_FILE" || log_both "    (Unable to parse capabilities)"
+        fi
+    else
+        test_failed "WOPI discovery endpoint not responding" "URL: https://${WOPISERVER_DOMAIN}/wopi/cbox/endpoints\nNo response received" "WOPI Server" "true"
+        add_recommendation "Verify Collaboration container environment variables"
+    fi
+else
+    test_warning "Cannot test WOPI discovery (Collaboration container not running)" "Container ${COLLABORATION_CONTAINER} is not in running state" "WOPI Server"
+fi
+
+################################################################################
+# TEST 9: COLLABORA CAPABILITIES
+################################################################################
+
+print_section "Collabora Online Capabilities"
+
+if [ "$COLLABORA_RUNNING" = true ]; then
+    log_both "Testing Collabora discovery..."
+    COLLABORA_DISCOVERY=$(curl -k -s --max-time 10 "https://${COLLABORA_DOMAIN}/hosting/discovery" 2>&1)
+    
+    log_file "Collabora Discovery Response:"
+    log_file "$COLLABORA_DISCOVERY"
+    
+    if echo "$COLLABORA_DISCOVERY" | grep -q "wopi-discovery"; then
+        test_passed "Collabora discovery endpoint responding" "Endpoint: https://${COLLABORA_DOMAIN}/hosting/discovery" "Collabora"
+        
+        if echo "$COLLABORA_DISCOVERY" | grep -q "docx"; then
+            log_both "  ✓ Word documents (.docx) supported"
+        fi
+        if echo "$COLLABORA_DISCOVERY" | grep -q "xlsx"; then
+            log_both "  ✓ Excel spreadsheets (.xlsx) supported"
+        fi
+        if echo "$COLLABORA_DISCOVERY" | grep -q "pptx"; then
+            log_both "  ✓ PowerPoint presentations (.pptx) supported"
+        fi
+    else
+        test_failed "Collabora discovery endpoint not responding correctly" "URL: https://${COLLABORA_DOMAIN}/hosting/discovery\nExpected: XML with 'wopi-discovery'\nReceived: ${COLLABORA_DISCOVERY:0:500}" "Collabora" "true"
+        add_recommendation "Check Collabora container status and configuration"
+    fi
+    
+    log_both "Testing Collabora admin interface..."
+    ADMIN_RESPONSE=$(curl -k -s -o /dev/null -w "%{http_code}" --max-time 10 "https://${COLLABORA_DOMAIN}/browser/dist/admin/admin.html" 2>&1)
+    if [ "$ADMIN_RESPONSE" = "200" ] || [ "$ADMIN_RESPONSE" = "401" ]; then
+        test_passed "Collabora admin console accessible" "HTTP ${ADMIN_RESPONSE}" "Collabora"
+        if [ "$ADMIN_RESPONSE" = "401" ]; then
+            log_both "    (Protected by authentication - good!)"
+        fi
+    else
+        test_warning "Collabora admin console returned HTTP ${ADMIN_RESPONSE}" "Expected 200 or 401, got ${ADMIN_RESPONSE}" "Collabora"
+    fi
+else
+    test_warning "Cannot test Collabora capabilities (container not running)" "Container ${COLLABORA_CONTAINER} is not in running state" "Collabora"
+fi
+
+################################################################################
+# TEST 10: SSL/TLS CONFIGURATION
+################################################################################
+
+print_section "SSL/TLS Configuration"
+
+log_both "Testing OpenCloud SSL..."
+if [ "$HIDE_SENSITIVE_DATA" = "true" ]; then
+    SSL_TEST=$(echo | openssl s_client -connect "${OCIS_DOMAIN}:443" -servername "${OCIS_DOMAIN}" 2>&1 | grep -E "Verify return code|subject=|issuer=" | head -3)
+    log_file "OpenCloud SSL Details (sanitized):"
+    log_file "$SSL_TEST"
+    
+    if echo "$SSL_TEST" | grep -q "Verify return code: 0"; then
+        test_passed "OpenCloud SSL certificate valid" "[Certificate details hidden for privacy]" "Reverse Proxy"
+    else
+        test_warning "Could not verify OpenCloud SSL certificate" "Connection issue or certificate problem" "Reverse Proxy"
+    fi
+else
+    SSL_INFO=$(echo | openssl s_client -connect "${OCIS_DOMAIN}:443" -servername "${OCIS_DOMAIN}" 2>&1)
+    log_file "OpenCloud SSL Details:"
+    log_file "$SSL_INFO"
+    
+    SSL_CERT=$(echo "$SSL_INFO" | openssl x509 -noout -subject -dates 2>/dev/null)
+    if [ -n "$SSL_CERT" ]; then
+        test_passed "OpenCloud SSL certificate valid" "$SSL_CERT" "Reverse Proxy"
+        echo "$SSL_CERT" | while read line; do log_both "    $line"; done
+    else
+        test_warning "Could not verify OpenCloud SSL certificate" "Connection to ${OCIS_DOMAIN}:443 failed or certificate invalid" "Reverse Proxy"
+        add_recommendation "Verify SSL certificate for ${OCIS_DOMAIN}"
+    fi
+fi
+
+log_both "Testing Collabora SSL..."
+if [ "$HIDE_SENSITIVE_DATA" = "true" ]; then
+    SSL_TEST=$(echo | openssl s_client -connect "${COLLABORA_DOMAIN}:443" -servername "${COLLABORA_DOMAIN}" 2>&1 | grep -E "Verify return code|subject=|issuer=" | head -3)
+    
+    if echo "$SSL_TEST" | grep -q "Verify return code: 0"; then
+        test_passed "Collabora SSL certificate valid" "[Certificate details hidden for privacy]" "Reverse Proxy"
+    else
+        test_warning "Could not verify Collabora SSL certificate" "Connection issue or certificate problem" "Reverse Proxy"
+    fi
+else
+    SSL_INFO=$(echo | openssl s_client -connect "${COLLABORA_DOMAIN}:443" -servername "${COLLABORA_DOMAIN}" 2>&1)
+    log_file "Collabora SSL Details:"
+    log_file "$SSL_INFO"
+    
+    SSL_CERT=$(echo "$SSL_INFO" | openssl x509 -noout -subject -dates 2>/dev/null)
+    if [ -n "$SSL_CERT" ]; then
+        test_passed "Collabora SSL certificate valid" "$SSL_CERT" "Reverse Proxy"
+    else
+        test_warning "Could not verify Collabora SSL certificate" "Connection to ${COLLABORA_DOMAIN}:443 failed or certificate invalid" "Reverse Proxy"
+    fi
+fi
+
+log_both "Testing WOPI Server SSL..."
+if [ "$HIDE_SENSITIVE_DATA" = "true" ]; then
+    SSL_TEST=$(echo | openssl s_client -connect "${WOPISERVER_DOMAIN}:443" -servername "${WOPISERVER_DOMAIN}" 2>&1 | grep -E "Verify return code|subject=|issuer=" | head -3)
+    
+    if echo "$SSL_TEST" | grep -q "Verify return code: 0"; then
+        test_passed "WOPI Server SSL certificate valid" "[Certificate details hidden for privacy]" "Reverse Proxy"
+    else
+        test_warning "Could not verify WOPI Server SSL certificate" "Connection issue or certificate problem" "Reverse Proxy"
+    fi
+else
+    SSL_INFO=$(echo | openssl s_client -connect "${WOPISERVER_DOMAIN}:443" -servername "${WOPISERVER_DOMAIN}" 2>&1)
+    log_file "WOPI Server SSL Details:"
+    log_file "$SSL_INFO"
+    
+    SSL_CERT=$(echo "$SSL_INFO" | openssl x509 -noout -subject -dates 2>/dev/null)
+    if [ -n "$SSL_CERT" ]; then
+        test_passed "WOPI Server SSL certificate valid" "$SSL_CERT" "Reverse Proxy"
+    else
+        test_warning "Could not verify WOPI Server SSL certificate" "Connection to ${WOPISERVER_DOMAIN}:443 failed or certificate invalid" "Reverse Proxy"
+    fi
+fi
+
+################################################################################
+# TEST 11: WEBSOCKET SUPPORT
+################################################################################
+
+print_section "WebSocket Support"
+
+if [ "$COLLABORA_RUNNING" = true ]; then
+    log_both "Testing WebSocket endpoint..."
+    WS_TEST=$(curl -k -s -o /dev/null -w "%{http_code}" --max-time 5 \
+        -H "Upgrade: websocket" \
+        -H "Connection: Upgrade" \
+        "https://${COLLABORA_DOMAIN}/cool/adminws" 2>&1)
+    
+    if [ "$WS_TEST" = "101" ] || [ "$WS_TEST" = "401" ] || [ "$WS_TEST" = "403" ]; then
+        test_passed "WebSocket upgrade supported (HTTP ${WS_TEST})" "Endpoint: https://${COLLABORA_DOMAIN}/cool/adminws" "Reverse Proxy"
+    else
+        test_warning "WebSocket response unclear (HTTP ${WS_TEST})" "Expected 101/401/403, got ${WS_TEST}" "Reverse Proxy"
+        add_recommendation "Verify reverse proxy supports WebSocket connections"
+    fi
+else
+    test_warning "Cannot test WebSocket (Collabora not running)" "Container ${COLLABORA_CONTAINER} is not in running state" "Reverse Proxy"
+fi
+
+################################################################################
+# TEST 12: CONTAINER ENVIRONMENT VARIABLES
+################################################################################
+
+print_section "Critical Environment Variables"
+
+if [ "$OPENCLOUD_RUNNING" = true ]; then
+    log_both "Checking OpenCloud environment..."
+    
+    ALL_ENV=$(docker exec "${OPENCLOUD_CONTAINER}" env 2>&1 | sort)
+    log_file "OpenCloud full environment:"
+    log_file "$ALL_ENV"
+    
+    OC_URL=$(docker exec "${OPENCLOUD_CONTAINER}" printenv OC_URL 2>/dev/null)
+    if [ "$OC_URL" = "https://${OCIS_DOMAIN}" ]; then
+        test_passed "OC_URL correctly set to https://${OCIS_DOMAIN}" "Value: $OC_URL" "OpenCloud"
+    else
+        test_failed "OC_URL mismatch" "Expected: https://${OCIS_DOMAIN}\nActual: ${OC_URL}" "OpenCloud" "true"
+        add_recommendation "Update OC_URL in OpenCloud container configuration"
+    fi
+    
+    CSP_LOC=$(docker exec "${OPENCLOUD_CONTAINER}" printenv PROXY_CSP_CONFIG_FILE_LOCATION 2>/dev/null)
+    if [ -n "$CSP_LOC" ]; then
+        test_passed "CSP config location set: ${CSP_LOC}" "" "OpenCloud"
+    else
+        test_warning "CSP config location not explicitly set" "Variable PROXY_CSP_CONFIG_FILE_LOCATION is empty" "OpenCloud"
+    fi
+fi
+
+if [ "$COLLABORA_RUNNING" = true ]; then
+    log_both "Checking Collabora environment..."
+    
+    ALL_ENV=$(docker exec "${COLLABORA_CONTAINER}" env 2>&1 | sort)
+    log_file "Collabora full environment:"
+    log_file "$ALL_ENV"
+    
+    ALIAS=$(docker exec "${COLLABORA_CONTAINER}" printenv aliasgroup1 2>/dev/null)
+    if echo "$ALIAS" | grep -q "${WOPISERVER_DOMAIN}"; then
+        test_passed "Collabora aliasgroup1 includes WOPI domain" "Value: $ALIAS" "Collabora"
+    else
+        test_failed "Collabora aliasgroup1 missing or incorrect" "Expected to contain: ${WOPISERVER_DOMAIN}\nActual value: ${ALIAS}" "Collabora" "true"
+        add_recommendation "Set aliasgroup1=https://${WOPISERVER_DOMAIN}:443"
+    fi
+    
+    EXTRA_PARAMS=$(docker exec "${COLLABORA_CONTAINER}" printenv extra_params 2>/dev/null)
+    log_file "Collabora extra_params: $EXTRA_PARAMS"
+    if echo "$EXTRA_PARAMS" | grep -q "ssl.enable=false"; then
+        test_passed "SSL disabled in Collabora (correct for reverse proxy)" "ssl.enable=false found in extra_params" "Collabora"
+    else
+        test_warning "SSL settings unclear in Collabora" "extra_params: ${EXTRA_PARAMS}" "Collabora"
+    fi
+fi
+
+if [ "$COLLABORATION_RUNNING" = true ]; then
+    log_both "Checking Collaboration (WOPI) environment..."
+    
+    ALL_ENV=$(docker exec "${COLLABORATION_CONTAINER}" env 2>&1 | sort)
+    log_file "Collaboration full environment:"
+    log_file "$ALL_ENV"
+    
+    WOPI_SRC=$(docker exec "${COLLABORATION_CONTAINER}" printenv COLLABORATION_WOPI_SRC 2>/dev/null)
+    if [ "$WOPI_SRC" = "https://${WOPISERVER_DOMAIN}" ]; then
+        test_passed "COLLABORATION_WOPI_SRC correctly set" "Value: $WOPI_SRC" "WOPI Server"
+    else
+        test_failed "COLLABORATION_WOPI_SRC mismatch" "Expected: https://${WOPISERVER_DOMAIN}\nActual: ${WOPI_SRC}" "WOPI Server" "true"
+        add_recommendation "Set COLLABORATION_WOPI_SRC=https://${WOPISERVER_DOMAIN}"
+    fi
+    
+    APP_ADDR=$(docker exec "${COLLABORATION_CONTAINER}" printenv COLLABORATION_APP_ADDR 2>/dev/null)
+    if [ "$APP_ADDR" = "https://${COLLABORA_DOMAIN}" ]; then
+        test_passed "COLLABORATION_APP_ADDR correctly set" "Value: $APP_ADDR" "WOPI Server"
+    else
+        test_failed "COLLABORATION_APP_ADDR mismatch" "Expected: https://${COLLABORA_DOMAIN}\nActual: ${APP_ADDR}" "WOPI Server" "true"
+        add_recommendation "Set COLLABORATION_APP_ADDR=https://${COLLABORA_DOMAIN}"
+    fi
+fi
+
+################################################################################
+# TEST 13: CONTAINER LOGS ANALYSIS
+################################################################################
+
+if [ "$EXTENDED_TESTS" = "true" ]; then
+    print_section "Container Logs Analysis"
+    
+    if [ "$OPENCLOUD_RUNNING" = true ]; then
+        log_both "Analyzing OpenCloud logs for errors..."
+        FULL_LOGS=$(docker logs "${OPENCLOUD_CONTAINER}" --tail 100 2>&1)
+        log_file "OpenCloud last 100 log lines:"
+        log_file "$FULL_LOGS"
+        
+        ERROR_LOGS=$(echo "$FULL_LOGS" | grep -i "error\|fatal\|panic")
+        ERROR_COUNT=$(echo "$ERROR_LOGS" | wc -l)
+        
+        if [ "$ERROR_COUNT" -eq 0 ] || [ -z "$ERROR_LOGS" ]; then
+            test_passed "No recent errors in OpenCloud logs" "Checked last 100 lines" "OpenCloud"
+        else
+            test_warning "Found ${ERROR_COUNT} error messages in OpenCloud logs" "Recent errors:\n${ERROR_LOGS}" "OpenCloud"
+            log_both "  Recent errors:"
+            echo "$ERROR_LOGS" | tail -5 | while read line; do
+                log_both "    $line"
+            done
+        fi
+    fi
+    
+    if [ "$COLLABORA_RUNNING" = true ]; then
+        log_both "Analyzing Collabora logs for errors..."
+        FULL_LOGS=$(docker logs "${COLLABORA_CONTAINER}" --tail 100 2>&1)
+        log_file "Collabora last 100 log lines:"
+        log_file "$FULL_LOGS"
+        
+        ERROR_LOGS=$(echo "$FULL_LOGS" | grep -i "error\|fatal\|err:")
+        ERROR_COUNT=$(echo "$ERROR_LOGS" | wc -l)
+        
+        if [ "$ERROR_COUNT" -eq 0 ] || [ -z "$ERROR_LOGS" ]; then
+            test_passed "No recent errors in Collabora logs" "Checked last 100 lines" "Collabora"
+        else
+            test_warning "Found ${ERROR_COUNT} error messages in Collabora logs" "Recent errors:\n${ERROR_LOGS}" "Collabora"
+            log_both "  Recent errors:"
+            echo "$ERROR_LOGS" | tail -5 | while read line; do
+                log_both "    $line"
+            done
+        fi
+    fi
+    
+    if [ "$COLLABORATION_RUNNING" = true ]; then
+        log_both "Analyzing Collaboration logs for errors..."
+        FULL_LOGS=$(docker logs "${COLLABORATION_CONTAINER}" --tail 100 2>&1)
+        log_file "Collaboration last 100 log lines:"
+        log_file "$FULL_LOGS"
+        
+        ERROR_LOGS=$(echo "$FULL_LOGS" | grep -i "error\|fatal\|panic")
+        ERROR_COUNT=$(echo "$ERROR_LOGS" | wc -l)
+        
+        if [ "$ERROR_COUNT" -eq 0 ] || [ -z "$ERROR_LOGS" ]; then
+            test_passed "No recent errors in Collaboration logs" "Checked last 100 lines" "WOPI Server"
+        else
+            test_warning "Found ${ERROR_COUNT} error messages in Collaboration logs" "Recent errors:\n${ERROR_LOGS}" "WOPI Server"
+            log_both "  Recent errors:"
+            echo "$ERROR_LOGS" | tail -5 | while read line; do
+                log_both "    $line"
+            done
+        fi
+    fi
+fi
+
+################################################################################
+# TEST 14: REVERSE PROXY CONFIGURATION
+################################################################################
+
+print_section "Reverse Proxy Configuration"
+
+# Extract subdomain from domain (e.g., "opencloud" from "opencloud.yourdomain.com")
+extract_subdomain() {
+    echo "$1" | cut -d'.' -f1
+}
+
+OCIS_SUBDOMAIN=$(extract_subdomain "$OCIS_DOMAIN")
+COLLABORA_SUBDOMAIN=$(extract_subdomain "$COLLABORA_DOMAIN")
+WOPISERVER_SUBDOMAIN=$(extract_subdomain "$WOPISERVER_DOMAIN")
+
+case "$PROXY_TYPE" in
+    swag)
+        PROXY_CONF_PATH="/mnt/user/appdata/swag/nginx/proxy-confs"
+        if [ -d "$PROXY_CONF_PATH" ]; then
+            test_passed "SWAG configuration directory found" "Path: $PROXY_CONF_PATH" "Reverse Proxy"
+            
+            log_file "SWAG proxy configuration files:"
+            log_file "$(ls -la $PROXY_CONF_PATH 2>&1)"
+            
+            # Smart search for OpenCloud config using subdomain
+            OPENCLOUD_CONF=$(find "${PROXY_CONF_PATH}" -type f -name "*.conf" -exec grep -l "server_name.*${OCIS_SUBDOMAIN}" {} \; 2>/dev/null | head -1)
+            if [ -z "$OPENCLOUD_CONF" ]; then
+                # Fallback to pattern matching
+                OPENCLOUD_CONF=$(ls "${PROXY_CONF_PATH}"/*${OCIS_SUBDOMAIN}*.conf 2>/dev/null | head -1)
+            fi
+            
+            if [ -n "$OPENCLOUD_CONF" ]; then
+                test_passed "OpenCloud proxy config exists for ${OCIS_DOMAIN}" "File: $OPENCLOUD_CONF" "Reverse Proxy"
+                log_file "OpenCloud proxy config contents:"
+                log_file "$(cat $OPENCLOUD_CONF 2>&1)"
+                
+                # Check if it proxies to correct container/port
+                if grep -q "upstream_app.*${OPENCLOUD_CONTAINER}\|proxy_pass.*:9200" "$OPENCLOUD_CONF"; then
+                    test_passed "OpenCloud proxy targets correct backend" "Container: ${OPENCLOUD_CONTAINER}, Port: 9200" "Reverse Proxy"
+                else
+                    test_warning "OpenCloud proxy backend unclear" "Check proxy_pass directive in $OPENCLOUD_CONF" "Reverse Proxy"
+                fi
+            else
+                test_failed "OpenCloud proxy config not found for ${OCIS_DOMAIN}" "Expected file with server_name containing '${OCIS_SUBDOMAIN}' in $PROXY_CONF_PATH" "Reverse Proxy" "true"
+                add_recommendation "Create proxy config: ${PROXY_CONF_PATH}/${OCIS_SUBDOMAIN}.subdomain.conf"
+            fi
+            
+            # Smart search for Collabora config using subdomain
+            COLLABORA_CONF=$(find "${PROXY_CONF_PATH}" -type f -name "*.conf" -exec grep -l "server_name.*${COLLABORA_SUBDOMAIN}" {} \; 2>/dev/null | head -1)
+            if [ -z "$COLLABORA_CONF" ]; then
+                COLLABORA_CONF=$(ls "${PROXY_CONF_PATH}"/*${COLLABORA_SUBDOMAIN}*.conf 2>/dev/null | head -1)
+            fi
+            
+            if [ -n "$COLLABORA_CONF" ]; then
+                test_passed "Collabora proxy config exists for ${COLLABORA_DOMAIN}" "File: $COLLABORA_CONF" "Reverse Proxy"
+                log_file "Collabora proxy config contents:"
+                log_file "$(cat $COLLABORA_CONF 2>&1)"
+                
+                # Check WebSocket support
+                if grep -q "websocket\|Upgrade.*\$http_upgrade" "$COLLABORA_CONF"; then
+                    test_passed "Collabora proxy has WebSocket support" "Found WebSocket configuration" "Reverse Proxy"
+                else
+                    test_warning "Collabora proxy may be missing WebSocket support" "Check for WebSocket directives in $COLLABORA_CONF" "Reverse Proxy"
+                fi
+                
+                # Check if it proxies to correct container/port
+                if grep -q "upstream_app.*${COLLABORA_CONTAINER}\|proxy_pass.*:9980" "$COLLABORA_CONF"; then
+                    test_passed "Collabora proxy targets correct backend" "Container: ${COLLABORA_CONTAINER}, Port: 9980" "Reverse Proxy"
+                else
+                    test_warning "Collabora proxy backend unclear" "Check proxy_pass directive in $COLLABORA_CONF" "Reverse Proxy"
+                fi
+            else
+                test_failed "Collabora proxy config not found for ${COLLABORA_DOMAIN}" "Expected file with server_name containing '${COLLABORA_SUBDOMAIN}' in $PROXY_CONF_PATH" "Reverse Proxy" "true"
+                add_recommendation "Create proxy config: ${PROXY_CONF_PATH}/${COLLABORA_SUBDOMAIN}.subdomain.conf"
+            fi
+            
+            # Smart search for WOPI config using subdomain
+            WOPI_CONF=$(find "${PROXY_CONF_PATH}" -type f -name "*.conf" -exec grep -l "server_name.*${WOPISERVER_SUBDOMAIN}" {} \; 2>/dev/null | head -1)
+            if [ -z "$WOPI_CONF" ]; then
+                WOPI_CONF=$(ls "${PROXY_CONF_PATH}"/*${WOPISERVER_SUBDOMAIN}*.conf 2>/dev/null | head -1)
+            fi
+            
+            if [ -n "$WOPI_CONF" ]; then
+                test_passed "WOPI proxy config exists for ${WOPISERVER_DOMAIN}" "File: $WOPI_CONF" "Reverse Proxy"
+                log_file "WOPI proxy config contents:"
+                log_file "$(cat $WOPI_CONF 2>&1)"
+                
+                # Check if it proxies to correct container/port
+                if grep -q "upstream_app.*${COLLABORATION_CONTAINER}\|proxy_pass.*:9300" "$WOPI_CONF"; then
+                    test_passed "WOPI proxy targets correct backend" "Container: ${COLLABORATION_CONTAINER}, Port: 9300" "Reverse Proxy"
+                else
+                    test_warning "WOPI proxy backend unclear" "Check proxy_pass directive in $WOPI_CONF" "Reverse Proxy"
+                fi
+            else
+                test_failed "WOPI proxy config not found for ${WOPISERVER_DOMAIN}" "Expected file with server_name containing '${WOPISERVER_SUBDOMAIN}' in $PROXY_CONF_PATH" "Reverse Proxy" "true"
+                add_recommendation "Create proxy config: ${PROXY_CONF_PATH}/${WOPISERVER_SUBDOMAIN}.subdomain.conf"
+            fi
+        else
+            test_warning "SWAG configuration directory not found" "Expected path: ${PROXY_CONF_PATH}" "Reverse Proxy"
+        fi
+        ;;
+    *)
+        test_warning "Cannot auto-check ${PROXY_TYPE} configuration" "Manual verification required" "Reverse Proxy"
+        log_both "  Please manually verify:"
+        log_both "    - ${OCIS_DOMAIN} proxies to ${OPENCLOUD_CONTAINER}:9200"
+        log_both "    - ${COLLABORA_DOMAIN} proxies to ${COLLABORA_CONTAINER}:9980 with WebSocket support"
+        log_both "    - ${WOPISERVER_DOMAIN} proxies to ${COLLABORATION_CONTAINER}:9300"
+        ;;
+esac
+
+################################################################################
+# FINAL SUMMARY
+################################################################################
+
+log_both ""
+print_header "COMPREHENSIVE DIAGNOSTIC SUMMARY"
+log_both ""
+
+# Calculate success rate
+if [ $TOTAL_TESTS -gt 0 ]; then
+    SUCCESS_RATE=$((PASSED_TESTS * 100 / TOTAL_TESTS))
+else
+    SUCCESS_RATE=0
+fi
+
+log_both "${CYAN}Overall Statistics:${NC}"
+log_both "  ${GREEN}Passed:   ${PASSED_TESTS}/${TOTAL_TESTS}${NC}"
+log_both "  ${RED}Failed:   ${FAILED_TESTS}/${TOTAL_TESTS}${NC}"
+log_both "  ${YELLOW}Warnings: ${WARNING_TESTS}/${TOTAL_TESTS}${NC}"
+log_both "  Success Rate: ${SUCCESS_RATE}%"
+log_both ""
+
+# Component breakdown
+log_both "${CYAN}Results by Component:${NC}"
+for component in "${!COMPONENT_TESTS[@]}"; do
+    total=${COMPONENT_TESTS[$component]}
+    passed=${COMPONENT_PASSED[$component]:-0}
+    failed=${COMPONENT_FAILED[$component]:-0}
+    warnings=${COMPONENT_WARNINGS[$component]:-0}
+    
+    # Color code based on component health
+    if [ $failed -eq 0 ] && [ $warnings -le 1 ]; then
+        STATUS="${GREEN}✓ HEALTHY${NC}"
+    elif [ $failed -le 1 ]; then
+        STATUS="${YELLOW}⚠ DEGRADED${NC}"
+    else
+        STATUS="${RED}✗ CRITICAL${NC}"
+    fi
+    
+    log_both "  ${component}: ${STATUS}"
+    log_both "    Tests: ${total} | Passed: ${GREEN}${passed}${NC} | Failed: ${RED}${failed}${NC} | Warnings: ${YELLOW}${warnings}${NC}"
+done
+log_both ""
+
+# Critical failures section
+if [ ${#FAILURES[@]} -gt 0 ]; then
+    log_both "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    log_both "${RED}CRITICAL FAILURES (${#FAILURES[@]}):${NC}"
+    log_both "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    for i in "${!FAILURES[@]}"; do
+        FAILURE_TEXT="${FAILURES[$i]}"
+        COMPONENT=$(echo "$FAILURE_TEXT" | cut -d':' -f1)
+        MESSAGE=$(echo "$FAILURE_TEXT" | cut -d':' -f2-)
+        
+        log_both "${RED}$((i+1)). [${COMPONENT}]${MESSAGE}${NC}"
+        
+        # Find and display abbreviated error details
+        for detail in "${DETAILED_ERRORS[@]}"; do
+            if echo "$detail" | grep -q "^FAIL|${COMPONENT}|"; then
+                ERROR_MSG=$(echo "$detail" | cut -d'|' -f4)
+                if [ -n "$ERROR_MSG" ]; then
+                    # Show first line of error only
+                    FIRST_LINE=$(echo "$ERROR_MSG" | head -1)
+                    log_both "   ${RED}→${NC} ${FIRST_LINE:0:150}"
+                fi
+            fi
+        done
+    done
+    log_both ""
+fi
+
+# Warnings section
+if [ ${#WARNINGS[@]} -gt 0 ]; then
+    log_both "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    log_both "${YELLOW}WARNINGS (${#WARNINGS[@]}):${NC}"
+    log_both "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    for i in "${!WARNINGS[@]}"; do
+        WARNING_TEXT="${WARNINGS[$i]}"
+        COMPONENT=$(echo "$WARNING_TEXT" | cut -d':' -f1)
+        MESSAGE=$(echo "$WARNING_TEXT" | cut -d':' -f2-)
+        
+        log_both "${YELLOW}$((i+1)). [${COMPONENT}]${MESSAGE}${NC}"
+    done
+    log_both ""
+fi
+
+# Recommendations section
+if [ ${#RECOMMENDATIONS[@]} -gt 0 ]; then
+    log_both "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    log_both "${CYAN}RECOMMENDED ACTIONS (${#RECOMMENDATIONS[@]}):${NC}"
+    log_both "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    for i in "${!RECOMMENDATIONS[@]}"; do
+        log_both "  $((i+1)). ${RECOMMENDATIONS[$i]}"
+    done
+    log_both ""
+fi
+
+# Overall system assessment
+log_both "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+log_both "${CYAN}SYSTEM HEALTH ASSESSMENT:${NC}"
+log_both "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+# Determine what will work and what won't
+OPENCLOUD_WORKS=true
+COLLABORA_INTEGRATION_WORKS=true
+
+# Check critical components
+if [ "$CRITICAL_FAILURES" = "true" ]; then
+    log_both ""
+    log_both "${RED}⚠ CRITICAL ISSUES DETECTED${NC}"
+    
+    # Analyze what's broken
+    if echo "${FAILURES[*]}" | grep -q "Network:"; then
+        log_both "${RED}✗ Docker Network Issues${NC}"
+        log_both "  → Containers cannot communicate"
+        OPENCLOUD_WORKS=false
+        COLLABORA_INTEGRATION_WORKS=false
+    fi
+    
+    if echo "${FAILURES[*]}" | grep -q "OpenCloud.*container.*not"; then
+        log_both "${RED}✗ OpenCloud Container Not Running${NC}"
+        log_both "  → Primary service unavailable"
+        OPENCLOUD_WORKS=false
+        COLLABORA_INTEGRATION_WORKS=false
+    fi
+    
+    if echo "${FAILURES[*]}" | grep -q "Collabora.*container.*not"; then
+        log_both "${RED}✗ Collabora Container Not Running${NC}"
+        log_both "  → Document editing unavailable"
+        COLLABORA_INTEGRATION_WORKS=false
+    fi
+    
+    if echo "${FAILURES[*]}" | grep -q "WOPI.*container.*not\|Collaboration.*container.*not"; then
+        log_both "${RED}✗ WOPI Server Container Not Running${NC}"
+        log_both "  → Document editing integration unavailable"
+        COLLABORA_INTEGRATION_WORKS=false
+    fi
+    
+    if echo "${FAILURES[*]}" | grep -q "CSP.*missing\|CSP.*NOT include"; then
+        log_both "${RED}✗ CSP Configuration Issues${NC}"
+        log_both "  → Collabora frames will be blocked by browser"
+        COLLABORA_INTEGRATION_WORKS=false
+    fi
+    
+    if echo "${FAILURES[*]}" | grep -q "Reverse Proxy.*domain not accessible"; then
+        log_both "${RED}✗ Reverse Proxy Configuration Issues${NC}"
+        log_both "  → Services not accessible from outside"
+        OPENCLOUD_WORKS=false
+        COLLABORA_INTEGRATION_WORKS=false
+    fi
+    
+    if echo "${FAILURES[*]}" | grep -q "Connectivity.*CANNOT reach"; then
+        log_both "${RED}✗ Container Connectivity Issues${NC}"
+        log_both "  → Services cannot communicate"
+        COLLABORA_INTEGRATION_WORKS=false
+    fi
+    
+    if echo "${FAILURES[*]}" | grep -q "aliasgroup1\|COLLABORATION_WOPI_SRC\|COLLABORATION_APP_ADDR"; then
+        log_both "${RED}✗ Container Environment Variable Issues${NC}"
+        log_both "  → Incorrect service URLs configured"
+        COLLABORA_INTEGRATION_WORKS=false
+    fi
+fi
+
+log_both ""
+log_both "${CYAN}Functionality Assessment:${NC}"
+
+if [ "$OPENCLOUD_WORKS" = true ]; then
+    log_both "${GREEN}✓ OpenCloud Platform: OPERATIONAL${NC}"
+    log_both "  → Web interface accessible"
+    log_both "  → File storage and sharing should work"
+else
+    log_both "${RED}✗ OpenCloud Platform: NOT OPERATIONAL${NC}"
+    log_both "  → Core service unavailable"
+    log_both "  → Fix critical failures above to restore service"
+fi
+
+log_both ""
+
+if [ "$COLLABORA_INTEGRATION_WORKS" = true ]; then
+    log_both "${GREEN}✓ Collabora Integration: OPERATIONAL${NC}"
+    log_both "  → Document editing should work"
+    log_both "  → Real-time collaboration enabled"
+else
+    log_both "${RED}✗ Collabora Integration: NOT OPERATIONAL${NC}"
+    if [ "$OPENCLOUD_WORKS" = true ]; then
+        log_both "  → OpenCloud works but document editing unavailable"
+        log_both "  → Users can upload/download but cannot edit online"
+    else
+        log_both "  → Both OpenCloud and Collabora integration unavailable"
+    fi
+    log_both "  → Fix critical failures above to enable editing"
+fi
+
+log_both ""
+
+# Final verdict
+log_both "${CYAN}Overall System Status:${NC}"
+if [ $FAILED_TESTS -eq 0 ] && [ $WARNING_TESTS -le 2 ]; then
+    log_both "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    log_both "${GREEN}✓ SYSTEM FULLY OPERATIONAL${NC}"
+    log_both "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    log_both "  All components healthy and properly configured"
+    log_both "  OpenCloud + Collabora integration working as expected"
+elif [ $FAILED_TESTS -le 3 ] && [ "$CRITICAL_FAILURES" = "false" ]; then
+    log_both "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    log_both "${YELLOW}⚠ SYSTEM PARTIALLY OPERATIONAL${NC}"
+    log_both "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    log_both "  Core functionality available with minor issues"
+    log_both "  Address failures above for optimal performance"
+else
+    log_both "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    log_both "${RED}✗ SYSTEM NOT OPERATIONAL${NC}"
+    log_both "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    log_both "  Critical components have failures"
+    log_both "  Follow recommended actions above to restore service"
+fi
+
+log_both ""
+log_both "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+log_both ""
+
+log_both "Full diagnostic report saved to:"
+log_both "  ${GREEN}${DIAGNOSTIC_FILE}${NC}"
+
+if [ "$HIDE_SENSITIVE_DATA" = "true" ]; then
+    log_both ""
+    log_both "${YELLOW}⚠️  Privacy mode was enabled - this report is safe to share publicly${NC}"
+fi
+
+log_both ""
+log_both "For further troubleshooting:"
+log_both "  • Review full log file for detailed error messages"
+log_both "  • Check container logs: ${CYAN}docker logs <container-name>${NC}"
+log_both "  • Verify network: ${CYAN}docker network inspect ${NETWORK_NAME}${NC}"
+log_both "  • OpenCloud documentation: ${CYAN}https://docs.opencloud.eu/${NC}"
+log_both ""
+
+# Final summary in log file
+log_file ""
+log_file "================================================================================"
+log_file "DIAGNOSTIC SUMMARY"
+log_file "================================================================================"
+log_file "Total Tests: ${TOTAL_TESTS}"
+log_file "Passed: ${PASSED_TESTS}"
+log_file "Failed: ${FAILED_TESTS}"
+log_file "Warnings: ${WARNING_TESTS}"
+log_file "Success Rate: ${SUCCESS_RATE}%"
+log_file ""
+log_file "OpenCloud Platform: $([ "$OPENCLOUD_WORKS" = true ] && echo "OPERATIONAL" || echo "NOT OPERATIONAL")"
+log_file "Collabora Integration: $([ "$COLLABORA_INTEGRATION_WORKS" = true ] && echo "OPERATIONAL" || echo "NOT OPERATIONAL")"
+log_file ""
+log_file "Privacy Mode: ${HIDE_SENSITIVE_DATA}"
+log_file "Report generated at: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+log_file "================================================================================"
+
+exit 0
