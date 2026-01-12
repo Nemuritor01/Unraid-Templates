@@ -9,23 +9,20 @@
   <Privileged>false</Privileged>
   <Support>https://radicale.org/</Support>
   <Project>https://github.com/opencloud-eu/container-radicale</Project>
-  <Overview>Radicale CalDAV and CardDAV Server - Provides calendar and contact synchronization for OpenCloud. This container integrates with OpenCloud through an authenticating reverse proxy setup. Users access their calendars and contacts through the OpenCloud web interface or CalDAV/CardDAV clients using app tokens.</Overview>
+  <Overview>Radicale CalDAV and CardDAV Server - Provides calendar and contact synchronization for OpenCloud. This container integrates with OpenCloud through an authenticating reverse proxy setup. Users access their calendars and contacts through CalDAV/CardDAV clients (mobile apps, Thunderbird, etc.) using OpenCloud app tokens for authentication.</Overview>
   <Category>Productivity: Tools:</Category>
   <WebUI/>
   <TemplateURL/>
   <Icon>https://raw.githubusercontent.com/nwithan8/unraid_templates/master/images/radicale-icon.png</Icon>
   <ExtraParams/>
-  <PostArgs>--config /config/config</PostArgs>
+  <PostArgs/>
   <CPUset/>
-  <DateInstalled>1734000000</DateInstalled>
   <DonateText/>
   <DonateLink/>
-  <Requires>Requires OpenCloud container to be running first. Configure proxy.yaml in OpenCloud for Radicale integration.</Requires>
-  <Config Name="HTTP Port" Target="5232" Default="5232" Mode="tcp" Description="Radicale HTTP Port (internal, proxied through OpenCloud)" Type="Port" Display="always" Required="true" Mask="false">5232</Config>
-  <Config Name="Data Directory" Target="/data" Default="/mnt/user/appdata/radicale/data" Mode="rw" Description="Radicale data directory for calendars and contacts" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/radicale/data</Config>
-  <Config Name="Config Directory" Target="/config" Default="/mnt/user/appdata/radicale/config" Mode="rw" Description="Radicale configuration directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/radicale/config</Config>
+  <Requires>Requires OpenCloud container to be running first. Configure proxy.yaml in OpenCloud for Radicale integration. Both containers must be on the same Docker network.</Requires>
+  <Config Name="HTTP Port" Target="5232" Default="5232" Mode="tcp" Description="Radicale HTTP Port (internal only, proxied through OpenCloud)" Type="Port" Display="always" Required="true" Mask="false">5232</Config>
+  <Config Name="Data Directory" Target="/var/lib/radicale" Default="/mnt/user/appdata/radicale/data" Mode="rw" Description="Radicale data directory for calendars and contacts storage" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/radicale/data</Config>
+  <Config Name="Config Directory" Target="/etc/radicale" Default="/mnt/user/appdata/radicale/config" Mode="rw" Description="Radicale configuration directory (must contain 'config' file)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/radicale/config</Config>
   <Config Name="RADICALE_LOG_LEVEL" Target="RADICALE_LOG_LEVEL" Default="info" Mode="" Description="Log level (debug, info, warning, error)" Type="Variable" Display="advanced" Required="false" Mask="false">info</Config>
-  <Config Name="RADICALE_STORAGE_BACKEND" Target="RADICALE_STORAGE_BACKEND" Default="filesystem" Mode="" Description="Storage backend type" Type="Variable" Display="advanced" Required="false" Mask="false">filesystem</Config>
-  <Config Name="RADICALE_STORAGE_FILESYSTEM_FOLDER" Target="RADICALE_STORAGE_FILESYSTEM_FOLDER" Default="/data" Mode="" Description="Filesystem storage location" Type="Variable" Display="advanced" Required="false" Mask="false">/data</Config>
   <TailscaleStateDir/>
 </Container>
