@@ -36,6 +36,53 @@
 
 ---
 
+## 🔧 Platform-Specific Configuration
+
+### Pangolin Users
+
+If you're running this on a **Pangolin server** with Traefik as your reverse proxy, you need to adjust your Traefik configuration:
+
+#### Required Traefik Configuration
+
+Add the following options to your **Traefik static configuration** in Pangolin:
+
+```yaml
+# In your Traefik static config (traefik.yml or via Pangolin UI)
+entryPoints:
+  web:
+    address: :80
+  websecure:
+    address: :443
+    http:
+      middlewares:
+        - crowdsec@file
+        - nextcloud-hstsfile
+  tls:
+    certResolver: letsencrypt
+    encodedCharacters:
+      allowEncodedSlash: true
+      allowEncodedHash: true
+      allowEncodedQuestionMark: true
+transport:
+  respondingTimeouts:
+    readTimeout: 30m
+```
+
+**Key settings for OpenCloud:**
+- `allowEncodedSlash: true` - Required for WebDAV paths in CalDAV/CardDAV
+- `allowEncodedQuestionMark: true` - Required for query parameters in Collabora
+
+#### Steps to Apply:
+
+1. **Access Pangolin UI** → Navigate to Traefik settings
+2. **Edit static configuration** → Add the `encodedCharacters` section under `tls`
+3. **Restart Traefik** → Apply changes via Pangolin interface
+4. **Verify** → Check Traefik logs for successful restart
+
+> **Note:** These settings are crucial for proper CalDAV/CardDAV functionality and Collabora document editing. Without them, you may experience authentication issues or broken file paths.
+
+---
+
 ## 🚀 Quick Start
 
 ### Step 1: Run Pre-Installation Script
@@ -323,6 +370,23 @@ docker logs radicale
 # Desktop app needs to see actual TLS connection
 ```
 
+### Pangolin/Traefik Issues
+
+If you're experiencing issues with CalDAV/CardDAV or Collabora on Pangolin:
+
+1. **Verify Traefik configuration:**
+   ```bash
+   # Check if encoded characters are allowed
+   grep -A5 "encodedCharacters" /path/to/traefik.yml
+   ```
+
+2. **Common symptoms of missing configuration:**
+   - CalDAV/CardDAV URLs return 404 errors
+   - Collabora documents fail to load
+   - Authentication loops in sync clients
+
+3. **Solution:** Ensure `allowEncodedSlash` and `allowEncodedQuestionMark` are set to `true` in Traefik static config (see Platform-Specific Configuration above)
+
 ## 🔒 Security Considerations
 
 ### Production Recommendations
@@ -352,6 +416,7 @@ docker logs radicale
 - **Collabora Documentation:** https://www.collaboraoffice.com/code/
 - **SWAG Documentation:** https://docs.linuxserver.io/general/swag
 - **Radicale Documentation:** https://radicale.org/v3.html
+- **Pangolin Documentation:** https://pangolin.com/docs (for Traefik configuration)
 
 ## 🤝 Contributing
 
@@ -365,10 +430,11 @@ These templates are provided as-is. OpenCloud, Collabora, and Radicale are subje
 
 If this helped you, consider:
 - ⭐ Starring this repository
-- 📢 Sharing with others running Unraid
+- 📢 Sharing with others running Unraid or Pangolin
 - 🐛 Reporting issues you encounter
 
 ---
 
-**Template Version:** 2024.12
-**Compatible with:** Unraid 7.2.0+, OpenCloud Rolling, Collabora Latest
+**Template Version:** 2024.12  
+**Compatible with:** Unraid 7.2.0+, OpenCloud Rolling, Collabora Latest  
+**Platform Support:** Unraid (SWAG), Pangolin (Traefik)
