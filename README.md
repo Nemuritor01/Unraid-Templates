@@ -56,7 +56,6 @@ entryPoints:
     http:
       middlewares:
         - crowdsec@file
-        - nextcloud-hstsfile
   tls:
     certResolver: letsencrypt
     encodedCharacters:
