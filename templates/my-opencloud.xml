@@ -13,7 +13,7 @@
   <Category>Cloud: Productivity: Tools:</Category>
   <WebUI>https://opencloud.yourdomain.com</WebUI>
   <TemplateURL/>
-  <Icon>https://avatars.githubusercontent.com/u/188916550?s=48&amp;v=4</Icon>
+  <Icon>https://raw.githubusercontent.com/Nemuritor01/Unraid-Templates/refs/heads/main/templates/docker-icons/opencloud.png</Icon>
   <ExtraParams>--entrypoint=/bin/sh</ExtraParams>
   <PostArgs>-c "opencloud init || true; opencloud server"</PostArgs>
   <CPUset/>
