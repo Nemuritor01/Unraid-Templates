@@ -1,1 +1,41 @@
-
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Collaboration</Name>
+  <Repository>opencloudeu/opencloud-rolling:latest</Repository>
+  <Registry>https://hub.docker.com/r/opencloudeu/opencloud-rolling</Registry>
+  <Network>opencloud-net</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://docs.opencloud.eu/</Support>
+  <Project>https://github.com/opencloud-eu/opencloud</Project>
+  <Overview>OpenCloud Collaboration Server - WOPI server that enables document editing integration between OpenCloud and Collabora Online. This service must be started after both OpenCloud and Collabora containers are running.</Overview>
+  <Category>Productivity: Tools:</Category>
+  <WebUI>https://wopiserver.yourdomain.com</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/opencloud-eu/opencloud/main/docs/assets/logo.svg</Icon>
+  <ExtraParams>--entrypoint=/bin/sh</ExtraParams>
+  <PostArgs>-c "opencloud collaboration server"</PostArgs>
+  <CPUset/>
+  <DateInstalled>1734000000</DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Requires>Requires OpenCloud and Collabora containers to be running first</Requires>
+  <Config Name="HTTP Port" Target="9300" Default="9300" Mode="tcp" Description="Collaboration HTTP Port (WOPI)" Type="Port" Display="always" Required="true" Mask="false">9300</Config>
+  <Config Name="MICRO_REGISTRY_ADDRESS" Target="MICRO_REGISTRY_ADDRESS" Default="YourServerIP:9233" Mode="" Description="NATS registry address (use OpenCloud container IP:9233)" Type="Variable" Display="always" Required="true" Mask="false">YourServerIP:9233</Config>
+  <Config Name="COLLABORATION_WOPI_SRC" Target="COLLABORATION_WOPI_SRC" Default="https://wopiserver.yourdomain.com" Mode="" Description="WOPI server public URL" Type="Variable" Display="always" Required="true" Mask="false">https://wopiserver.yourdomain.com</Config>
+  <Config Name="COLLABORATION_APP_ADDR" Target="COLLABORATION_APP_ADDR" Default="https://collabora.yourdomain.com" Mode="" Description="Collabora Online public URL" Type="Variable" Display="always" Required="true" Mask="false">https://collabora.yourdomain.com</Config>
+  <Config Name="OC_URL" Target="OC_URL" Default="https://opencloud.yourdomain.com" Mode="" Description="OpenCloud public URL" Type="Variable" Display="always" Required="true" Mask="false">https://opencloud.yourdomain.com</Config>
+  <Config Name="Config Directory" Target="/etc/opencloud" Default="/mnt/user/appdata/opencloud/config" Mode="rw" Description="OpenCloud configuration directory (shared with OpenCloud container)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/opencloud/config</Config>
+  <Config Name="gRPC Port" Target="9301" Default="9301" Mode="tcp" Description="Collaboration gRPC Port" Type="Port" Display="advanced" Required="false" Mask="false">9301</Config>
+  <Config Name="COLLABORATION_GRPC_ADDR" Target="COLLABORATION_GRPC_ADDR" Default="0.0.0.0:9301" Mode="" Description="gRPC listening address" Type="Variable" Display="advanced" Required="false" Mask="false">0.0.0.0:9301</Config>
+  <Config Name="COLLABORATION_HTTP_ADDR" Target="COLLABORATION_HTTP_ADDR" Default="0.0.0.0:9300" Mode="" Description="HTTP listening address (WOPI)" Type="Variable" Display="advanced" Required="false" Mask="false">0.0.0.0:9300</Config>
+  <Config Name="MICRO_REGISTRY" Target="MICRO_REGISTRY" Default="nats-js-kv" Mode="" Description="Microservice registry type" Type="Variable" Display="advanced" Required="false" Mask="false">nats-js-kv</Config>
+  <Config Name="COLLABORATION_APP_NAME" Target="COLLABORATION_APP_NAME" Default="CollaboraOnline" Mode="" Description="Application name" Type="Variable" Display="advanced" Required="false" Mask="false">CollaboraOnline</Config>
+  <Config Name="COLLABORATION_APP_PRODUCT" Target="COLLABORATION_APP_PRODUCT" Default="Collabora" Mode="" Description="Product name" Type="Variable" Display="advanced" Required="false" Mask="false">Collabora</Config>
+  <Config Name="COLLABORATION_APP_ICON" Target="COLLABORATION_APP_ICON" Default="https://collabora.yourdomain.com/favicon.ico" Mode="" Description="Application icon URL" Type="Variable" Display="advanced" Required="false" Mask="false">https://collabora.yourdomain.com/favicon.ico</Config>
+  <Config Name="COLLABORATION_APP_INSECURE" Target="COLLABORATION_APP_INSECURE" Default="true" Mode="" Description="Skip TLS verification for Collabora connection" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="COLLABORATION_CS3API_DATAGATEWAY_INSECURE" Target="COLLABORATION_CS3API_DATAGATEWAY_INSECURE" Default="true" Mode="" Description="Skip TLS verification for CS3 API data gateway" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="COLLABORATION_LOG_LEVEL" Target="COLLABORATION_LOG_LEVEL" Default="info" Mode="" Description="Log level (debug, info, warn, error)" Type="Variable" Display="advanced" Required="false" Mask="false">info</Config>
+  <TailscaleStateDir/>
+</Container>
