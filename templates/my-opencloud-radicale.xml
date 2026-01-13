@@ -13,7 +13,7 @@
   <Category>Productivity: Tools:</Category>
   <WebUI/>
   <TemplateURL/>
-  <Icon>https://raw.githubusercontent.com/nwithan8/unraid_templates/master/images/radicale-icon.png</Icon>
+  <Icon>https://raw.githubusercontent.com/Nemuritor01/Unraid-Templates/refs/heads/main/templates/docker-icons/radicale-opencloud.png</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
