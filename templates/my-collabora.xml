@@ -13,7 +13,7 @@
   <Category>Productivity: Tools:</Category>
   <WebUI>https://collabora.YourDomain.de</WebUI>
   <TemplateURL/>
-  <Icon>https://avatars.githubusercontent.com/u/22418908?s=200&amp;amp;v=4</Icon>
+  <Icon>https://raw.githubusercontent.com/Nemuritor01/Unraid-Templates/refs/heads/main/templates/docker-icons/collabora-opencloud.png</Icon>
   <ExtraParams>--cap-add=MKNOD --entrypoint=/bin/bash</ExtraParams>
   <PostArgs>-c "coolconfig generate-proof-key &amp;amp;&amp;amp; /start-collabora-online.sh"</PostArgs>
   <CPUset/>
@@ -30,3 +30,4 @@
   <Config Name="TrueType Fonts 2" Target="/opt/cool/systemplate/usr/share/fonts/truetype/more" Default="/usr/share/fonts/truetype" Mode="ro" Description="System template TrueType fonts" Type="Path" Display="advanced" Required="false" Mask="false">/usr/share/fonts/truetype</Config>
   <TailscaleStateDir/>
 </Container>
+
