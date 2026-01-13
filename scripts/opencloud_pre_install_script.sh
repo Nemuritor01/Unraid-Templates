@@ -20,7 +20,7 @@ ENABLE_RADICALE="true"
 # Radicale Web UI (set to "true" to enable the web interface)
 # Note: Web UI is accessible at https://yourdomain.com/caldav/.web/
 # WARNING: Web UI has its own authentication - keep disabled for security unless needed
-ENABLE_RADICALE_WEBUI="false"
+ENABLE_RADICALE_WEBUI="true"
 
 # Docker Network Configuration
 CUSTOM_NETWORK="true"
@@ -29,19 +29,21 @@ NETWORK_NAME="opencloud-net"
 # Domain Configuration (without https://)
 OCIS_DOMAIN="opencloud.yourdomain.com"
 COLLABORA_DOMAIN="collabora.yourdomain.com"
-WOPISERVER_DOMAIN="wopiserver.yourdomain.com"
+WOPISERVER_DOMAIN="wopi.yourdomain.com"
 
 # Installation Paths
 OCL_BASE="/mnt/user/appdata/opencloud"
+OCL_DATA_BASE="/mnt/user/appdata/opencloud"
 COL_BASE="/mnt/user/appdata/collabora"
 RAD_BASE="/mnt/user/appdata/radicale"
+
 
 ################################################################################
 # SCRIPT START
 ################################################################################
 
 OCL_CONFIG="${OCL_BASE}/config"
-OCL_DATA="${OCL_BASE}/data"
+OCL_DATA="${OCL_DATA_BASE}/data"
 OCL_APPS="${OCL_BASE}/apps"
 COL_CONFIG="${COL_BASE}/config"
 COLLAB_CONFIG="${OCL_BASE}/collaboration"
