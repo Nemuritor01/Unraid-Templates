@@ -1,4 +1,4 @@
-# OpenCloud for Unraid
+entryPointsfor Unraid
 
 > Complete Unraid templates and configuration for deploying OpenCloud with document editing (Collabora Online) and calendar/contacts (Radicale) integration.
 
@@ -49,22 +49,17 @@ Add the following options to your **Traefik static configuration** in Pangolin:
 ```yaml
 # In your Traefik static config (traefik.yml or via Pangolin UI)
 entryPoints:
-  web:
-    address: :80
-  websecure:
-    address: :443
-    http:
-      middlewares:
-        - crowdsec@file
+  web:...
+    ...
   tls:
     certResolver: letsencrypt
     encodedCharacters:
-      allowEncodedSlash: true
-      allowEncodedHash: true
-      allowEncodedQuestionMark: true
+   ❗ allowEncodedSlash: true
+      allowEncodedHash:  true
+   ❗ allowEncodedQuestionMark: true
 transport:
   respondingTimeouts:
-    readTimeout: 30m
+    ...
 ```
 
 **Key settings for OpenCloud:**
