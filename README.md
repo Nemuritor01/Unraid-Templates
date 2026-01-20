@@ -133,11 +133,11 @@ Copy the three configuration files to your SWAG container:
 
 ### Step 3: Install Unraid Templates
 
-1. **Download templates** from this repository:
-   - `my-opencloud.xml`
-   - `my-collabora.xml`
-   - `my-collaboration.xml`
-   - `my-opencloud-radicale.xml` (if using Radicale)
+1. **Download templates** from this repository (templates folder):
+   - `opencloud.xml`
+   - `opencloud-collabora.xml`
+   - `opencloud-collaboration.xml`
+   - `opencloud-radicale.xml` (if using Radicale)
 
 2. **Copy to Unraid:**
    ```bash
