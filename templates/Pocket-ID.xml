@@ -3,7 +3,7 @@
   <Name>Pocket-ID</Name>
   <Repository>ghcr.io/pocket-id/pocket-id:v2</Repository>
   <Registry>https://ghcr.io/pocket-id/pocket-id</Registry>
-  <Network>mycastle</Network>
+  <Network>bridge</Network>
   <MyIP/>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
