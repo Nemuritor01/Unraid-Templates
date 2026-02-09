@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Pocket-ID</Name>
+  <Repository>ghcr.io/pocket-id/pocket-id:v2</Repository>
+  <Registry>https://ghcr.io/pocket-id/pocket-id</Registry>
+  <Network>mycastle</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/pocket-id/pocket-id/discussions</Support>
+  <Project>https://github.com/pocket-id/pocket-id</Project>
+  <ReadMe>https://pocket-id.org/docs</ReadMe>
+  <Overview>A simple OIDC provider that allows users to authenticate with their passkeys to your services. v2 with mandatory encryption key support.</Overview>
+  <Category>Network:Privacy Productivity: Security: Tools:Utilities</Category>
+  <WebUI>http://[IP]:[PORT:1411]/</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/nwithan8/unraid_templates/master/images/pocket-id-icon.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled>1770510357</DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI Port" Target="1411" Default="1411" Mode="tcp" Description="Port to access the Pocket-ID web interface." Type="Port" Display="always" Required="true" Mask="false">1411</Config>
+  <Config Name="App URL" Target="APP_URL" Default="https://id.example.com" Mode="" Description="The public URL where Pocket-ID will be accessed. Must be HTTPS for passkeys to work. Example: https://id.yourdomain.com" Type="Variable" Display="always" Required="true" Mask="false">https://your.pocketIDdomain.com</Config>
+  <Config Name="Encryption Key" Target="ENCRYPTION_KEY" Default="" Mode="" Description="REQUIRED in v2. Key used to encrypt sensitive data including private keys. Must be at least 16 characters. Generate in terminal with: openssl rand -base64 32" Type="Variable" Display="always" Required="true" Mask="true">ChangeME</Config>
+  <Config Name="Trust Proxy" Target="TRUST_PROXY" Default="true" Mode="" Description="Set to true when running behind a reverse proxy (Pangolin, SWAG, etc). Ensures correct client IP detection." Type="Variable" Display="always" Required="true" Mask="false">true</Config>
+  <Config Name="Maxmind License Key" Target="MAXMIND_LICENSE_KEY" Default="" Mode="" Description="Optional. License key for GeoLite2 database to show IP locations in audit logs. Get a free key at maxmind.com." Type="Variable" Display="always" Required="false" Mask="true">YourMaxMindLicenceKey</Config>
+  <Config Name="Disable UI Configuration" Target="UI_CONFIG_DISABLED" Default="false" Mode="" Description="If true, app settings can only be changed via environment variables, not through the web UI." Type="Variable" Display="always" Required="false" Mask="false">false</Config>
+  <Config Name="Data Path" Target="/app/data" Default="/mnt/user/appdata/pocket-id/data" Mode="rw" Description="Persistent data directory for database, uploads, and configuration." Type="Path" Display="always" Required="true" Mask="false"></Config>
+  <Config Name="Database Connection String" Target="DB_CONNECTION_STRING" Default="data/pocket-id.db" Mode="" Description="SQLite: just a file path (e.g. data/pocket-id.db). PostgreSQL: full connection string (e.g. postgresql://user:pass@host:5432/dbname). Provider is auto-detected." Type="Variable" Display="advanced" Required="false" Mask="false">data/pocket-id.db</Config>
+  <Config Name="Upload Path" Target="UPLOAD_PATH" Default="data/uploads" Mode="" Description="Path inside the container where uploaded files (logos etc) are stored." Type="Variable" Display="advanced" Required="false" Mask="false">data/uploads</Config>
+  <Config Name="Internal Port" Target="PORT" Default="1411" Mode="" Description="Internal port the server listens on. Should match the container port mapping. Do not change unless you know what you are doing." Type="Variable" Display="advanced" Required="false" Mask="false">1411</Config>
+  <Config Name="Internal Host" Target="HOST" Default="0.0.0.0" Mode="" Description="Internal host binding. Do not change." Type="Variable" Display="advanced" Required="false" Mask="false">0.0.0.0</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID for file permissions. Default 99 = nobody on Unraid." Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID for file permissions. Default 100 = users on Unraid." Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+  <TailscaleStateDir/>
+</Container>
