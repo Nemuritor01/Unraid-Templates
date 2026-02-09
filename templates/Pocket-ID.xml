@@ -14,7 +14,7 @@
   <Category>Network:Privacy Productivity: Security: Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:1411]/</WebUI>
   <TemplateURL/>
-  <Icon>https://raw.githubusercontent.com/nwithan8/unraid_templates/master/images/pocket-id-icon.png</Icon>
+  <Icon>https://raw.githubusercontent.com/Nemuritor01/Unraid-Templates/refs/heads/main/templates/docker-icons/pocket-id-icon.png</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
