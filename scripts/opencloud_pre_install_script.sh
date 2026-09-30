@@ -11,6 +11,7 @@
 #                      Pocket-ID encryption key, admin password)
 #    * Unraid XML templates, with YOUR domains already filled in
 #    * optional SWAG proxy configs
+#    * optional Yjs container for real-time collaborative editing (8.x)
 #
 #  It does NOT create or start any container. After running, go to
 #  Docker -> Add Container -> pick the template under "User templates"
@@ -22,6 +23,13 @@
 #    under /wopi and /collaboration. There is no separate Collaboration
 #    container and no wopiserver subdomain anymore.
 #
+#  ARCHITECTURE NOTE (8.x / Yjs):
+#    Real-time collaborative editing in the built-in Editor needs the separate
+#    Yjs relay (opencloudeu/yjs). It is a stateless WebSocket relay, stores
+#    nothing and needs no appdata folder. It is reached through the OpenCloud
+#    proxy at /yjs - no own domain and no published port. Unlike the web
+#    office it does not block the OpenCloud start and may be created any time.
+#
 #  ORDER OF INSTALLATION (wrong order crashes OpenCloud):
 #    1. Run this script
 #    2. Create + start the web office container (Collabora or Euro-Office)
@@ -32,7 +40,7 @@
 #    takes the WHOLE OpenCloud process down in a crash loop.
 ###############################################################################
 #name=OpenCloud Setup Generator
-#description=Creates folders, configs, secrets and ready-to-use Unraid XML templates for OpenCloud 7.5+
+#description=Creates folders, configs, secrets and ready-to-use Unraid XML templates for OpenCloud 7.5+ / 8.x incl. optional Yjs collaboration
 #arrayStarted=false
 
 #######################################################################################
@@ -51,6 +59,16 @@ ENABLE_EURO_OFFICE="false"     # Euro-Office / OnlyOffice fork
 ENABLE_RADICALE="true"         # Calendar/Contacts (CalDAV/CardDAV)
 ENABLE_RADICALE_WEBUI="true"   # Radicale built-in web interface
 ENABLE_POCKET_ID="false"       # Pocket-ID OIDC authentication (passkeys)
+ENABLE_YJS="false"             # Real-time collaborative editing (8.x, separate Yjs container)
+
+# ═══════════════════════════════════════════════════════════════════════════════════
+#  YJS  (only used when ENABLE_YJS="true")
+#
+#  Stateless WebSocket relay for the OpenCloud Editor - it stores nothing, so it
+#  needs no appdata folder. Reached through the OpenCloud proxy at /yjs.
+# ═══════════════════════════════════════════════════════════════════════════════════
+YJS_CONTAINER="YJS"            # container name (used in proxy.yaml and the SWAG conf)
+YJS_IMAGE="opencloudeu/yjs:1.0.0"
 
 # ═══════════════════════════════════════════════════════════════════════════════════
 #  DOMAINS  (no https://, just the domain)
@@ -88,6 +106,7 @@ OVERWRITE_COLLABORA="false"
 OVERWRITE_EURO_OFFICE="false"
 OVERWRITE_RADICALE="false"
 OVERWRITE_POCKET_ID="false"
+OVERWRITE_YJS="false"
 
 # ═══════════════════════════════════════════════════════════════════════════════════
 #  DOCKER NETWORK
@@ -110,6 +129,13 @@ PID_BASE="/mnt/user/appdata/pocket-id"
 # ═══════════════════════════════════════════════════════════════════════════════════
 GENERATE_SWAG_CONFS="false"
 SWAG_PROXY_CONFS="/mnt/user/appdata/swag/nginx/proxy-confs"
+
+# Upstream address used in the generated SWAG configs.
+#   ""  = use the container names (OpenCloud, Collabora, ...). SWAG must then
+#         share the Docker network, e.g. add it to ${NETWORK_NAME}.
+#   set = use this IP/hostname instead, e.g. "192.168.1.10" if your SWAG
+#         reaches the containers through the host (published ports).
+SWAG_UPSTREAM_HOST=""
 
 # SWAG config overwrite control (same logic as templates above)
 OVERWRITE_SWAG_CONFS="true"
@@ -169,6 +195,7 @@ write_template() {
             my-Euro-Office.xml) overwrite="${OVERWRITE_EURO_OFFICE}" ;;
             my-Radicale.xml)    overwrite="${OVERWRITE_RADICALE}" ;;
             my-Pocket-ID.xml)   overwrite="${OVERWRITE_POCKET_ID}" ;;
+            my-YJS.xml)         overwrite="${OVERWRITE_YJS}" ;;
             *)                  overwrite="false" ;;
         esac
     fi
@@ -262,6 +289,7 @@ say "  OpenCloud    : ${OC_URL}"
 [ -n "${WEBOFFICE_URL}" ] && say "  WOPI         : ${OC_URL}/wopi  (inside OpenCloud, no own domain)"
 [ "${ENABLE_RADICALE}" = "true" ]  && say "  Radicale     : enabled"
 [ "${ENABLE_POCKET_ID}" = "true" ] && say "  Pocket-ID    : https://${POCKET_ID_DOMAIN}"
+[ "${ENABLE_YJS}" = "true" ]       && say "  Yjs          : ${OC_URL}/yjs  (collaborative editing)"
 say "  Templates    : ${TEMPLATE_DIR}"
 say "  Network      : ${NETWORK_NAME}"
 say ""
@@ -502,34 +530,46 @@ if [ "${ENABLE_EURO_OFFICE}" = "true" ]; then
     fi
 fi
 
-# ---- Radicale -------------------------------------------------------------
-if [ "${ENABLE_RADICALE}" = "true" ]; then
+# ---- proxy.yaml (Radicale and/or Yjs) -------------------------------------
+if [ "${ENABLE_RADICALE}" = "true" ] || [ "${ENABLE_YJS}" = "true" ]; then
     act "write ${OCL_CONFIG}/proxy.yaml"
     if live; then
         {
         echo "additional_policies:"
         echo "  - name: default"
         echo "    routes:"
-        for ep in "/caldav/|/caldav" "/.well-known/caldav|/caldav" "/carddav/|/carddav" "/.well-known/carddav|/carddav"; do
-            endpoint="${ep%%|*}"; script="${ep#*|}"
-            echo "      - endpoint: ${endpoint}"
-            echo "        backend: http://radicale:5232"
-            echo "        remote_user_header: X-Remote-User"
-            echo "        skip_x_access_token: true"
-            echo "        additional_headers:"
-            echo "          - X-Script-Name: ${script}"
-        done
-        if [ "${ENABLE_RADICALE_WEBUI}" = "true" ]; then
-            echo "      - endpoint: /caldav/.web/"
-            echo "        backend: http://radicale:5232/"
+        # /yjs MUST live in the same policy/routes list as the Radicale routes -
+        # a second additional_policies block would drop one of them.
+        if [ "${ENABLE_YJS}" = "true" ]; then
+            echo "      - endpoint: /yjs"
+            echo "        backend: http://${YJS_CONTAINER}:1234"
             echo "        unprotected: true"
-            echo "        skip_x_access_token: true"
-            echo "        additional_headers:"
-            echo "          - X-Script-Name: /caldav"
+        fi
+        if [ "${ENABLE_RADICALE}" = "true" ]; then
+            for ep in "/caldav/|/caldav" "/.well-known/caldav|/caldav" "/carddav/|/carddav" "/.well-known/carddav|/carddav"; do
+                endpoint="${ep%%|*}"; script="${ep#*|}"
+                echo "      - endpoint: ${endpoint}"
+                echo "        backend: http://radicale:5232"
+                echo "        remote_user_header: X-Remote-User"
+                echo "        skip_x_access_token: true"
+                echo "        additional_headers:"
+                echo "          - X-Script-Name: ${script}"
+            done
+            if [ "${ENABLE_RADICALE_WEBUI}" = "true" ]; then
+                echo "      - endpoint: /caldav/.web/"
+                echo "        backend: http://radicale:5232/"
+                echo "        unprotected: true"
+                echo "        skip_x_access_token: true"
+                echo "        additional_headers:"
+                echo "          - X-Script-Name: /caldav"
+            fi
         fi
         } > "${OCL_CONFIG}/proxy.yaml"
     fi
+fi
 
+# ---- Radicale config ------------------------------------------------------
+if [ "${ENABLE_RADICALE}" = "true" ]; then
     act "write ${RAD_CONFIG}/config"
     if live; then
         cat > "${RAD_CONFIG}/config" <<'RADEOF'
@@ -642,6 +682,11 @@ OC_XML="${OC_XML}
   <Config Name=\"COLLABORATION_APP_PROOF_DISABLE\" Target=\"COLLABORATION_APP_PROOF_DISABLE\" Default=\"true\" Mode=\"\" Description=\"Euro-Office does not use WOPI proof keys\" Type=\"Variable\" Display=\"advanced\" Required=\"false\" Mask=\"false\">true</Config>
   <Config Name=\"EURO_OFFICE_DOMAIN\" Target=\"EURO_OFFICE_DOMAIN\" Default=\"${WEBOFFICE_DOMAIN}\" Mode=\"\" Description=\"Euro-Office domain (used in the CSP header)\" Type=\"Variable\" Display=\"advanced\" Required=\"false\" Mask=\"false\">${WEBOFFICE_DOMAIN}</Config>"
 fi
+fi
+
+if [ "${ENABLE_YJS}" = "true" ]; then
+OC_XML="${OC_XML}
+  <Config Name=\"WEB_OPTION_YJS_SERVER_URL\" Target=\"WEB_OPTION_YJS_SERVER_URL\" Default=\"\" Mode=\"\" Description=\"Yjs server URL for real-time collaborative editing. The ${YJS_CONTAINER} container must run on the same Docker network.\" Type=\"Variable\" Display=\"always\" Required=\"false\" Mask=\"false\">wss://${OCIS_DOMAIN}/yjs</Config>"
 fi
 
 OC_XML="${OC_XML}
@@ -777,6 +822,38 @@ RAD_XML="<?xml version=\"1.0\"?>
 write_template "my-Radicale.xml" "${RAD_XML}"
 fi
 
+# ---------------------------------------------------------------------- Yjs
+if [ "${ENABLE_YJS}" = "true" ]; then
+YJS_XML="<?xml version=\"1.0\"?>
+<Container version=\"2\">
+  <Name>${YJS_CONTAINER}</Name>
+  <Repository>${YJS_IMAGE}</Repository>
+  <Registry>https://hub.docker.com/r/opencloudeu/yjs</Registry>
+  <Network>${NETWORK_NAME}</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/opencloud-eu/web/issues</Support>
+  <Project>https://github.com/opencloud-eu/web</Project>
+  <Overview>Yjs relay for real-time collaborative editing in the OpenCloud Editor.&#13;&#10;&#13;&#10;It is a pure WebSocket relay: it stores no content and needs no appdata folder.&#13;&#10;&#13;&#10;OpenCloud reaches it through the proxy.yaml route /yjs -&gt; http://${YJS_CONTAINER}:1234, browsers through the reverse proxy at ${OC_URL}/yjs. It can be created any time and does not block the OpenCloud start.&#13;&#10;&#13;&#10;Only Markdown and .ocnote files support collaboration.</Overview>
+  <Category>Productivity: Tools:</Category>
+  <WebUI/>
+  <TemplateURL/>
+  <Icon>${ICON_BASE}/opencloud.png</Icon>
+  <ExtraParams>--stop-timeout=20 --user=1000:1000</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires>Needs the OpenCloud container on the same Docker network, with the /yjs route in its proxy.yaml.</Requires>
+  <Config Name=\"OpenCloud URL\" Target=\"OPENCLOUD_URL\" Default=\"http://OpenCloud:9200\" Mode=\"\" Description=\"Internal URL the relay uses to reach OpenCloud\" Type=\"Variable\" Display=\"always\" Required=\"true\" Mask=\"false\">http://OpenCloud:9200</Config>
+  <Config Name=\"PORT\" Target=\"PORT\" Default=\"1234\" Mode=\"\" Description=\"Internal listen port, not published. Must match the /yjs route in proxy.yaml.\" Type=\"Variable\" Display=\"always\" Required=\"true\" Mask=\"false\">1234</Config>
+  <Config Name=\"SHUTDOWN_GRACE_PERIOD_MS\" Target=\"SHUTDOWN_GRACE_PERIOD_MS\" Default=\"15000\" Mode=\"\" Description=\"Graceful shutdown grace period in milliseconds\" Type=\"Variable\" Display=\"advanced\" Required=\"false\" Mask=\"false\">15000</Config>
+  <TailscaleStateDir/>
+</Container>"
+write_template "my-YJS.xml" "${YJS_XML}"
+fi
+
 # ---------------------------------------------------------------- Pocket-ID
 if [ "${ENABLE_POCKET_ID}" = "true" ]; then
 PID_XML="<?xml version=\"1.0\"?>
@@ -826,8 +903,25 @@ elif [ ! -d "${SWAG_PROXY_CONFS}" ]; then
 else
     OC_SUB="${OCIS_DOMAIN%%.*}"
     OC_CONF_NAME="${OC_SUB}.subdomain.conf"
+    OC_UPSTREAM="${SWAG_UPSTREAM_HOST:-OpenCloud}"
+    YJS_SWAG_BLOCK=""
+    if [ "${ENABLE_YJS}" = "true" ]; then
+        YJS_SWAG_BLOCK="
+    # Yjs WebSocket relay
+    location ^~ /yjs {
+        include /config/nginx/proxy.conf;
+        include /config/nginx/resolver.conf;
+
+        set \$upstream_app ${OC_UPSTREAM};
+        set \$upstream_port 9200;
+        set \$upstream_proto http;
+        proxy_pass \$upstream_proto://\$upstream_app:\$upstream_port;
+    }
+"
+    fi
     OC_CONF_CONTENT="## OpenCloud 7.5+ - generated ${TS}
-## Serves the web UI plus /wopi and /collaboration on the same domain.
+## Serves the web UI plus /wopi, /collaboration and (if enabled) /yjs on the same domain.
+## Upstream '${OC_UPSTREAM}' - share the Docker network, or set SWAG_UPSTREAM_HOST.
 server {
     listen 443 ssl;
     listen [::]:443 ssl;
@@ -837,28 +931,27 @@ server {
 
     include /config/nginx/ssl.conf;
 
+    # OpenCloud uploads can be huge - no limit
     client_max_body_size 0;
+
+    # No buffering, long timeouts and keepalive - needed for SSE, WebSockets and WOPI
     proxy_buffering off;
     proxy_request_buffering off;
     proxy_read_timeout 3600s;
     proxy_send_timeout 3600s;
-
+    keepalive_timeout 5m;
+    keepalive_requests 100000;
+${YJS_SWAG_BLOCK}
+    # proxy.conf already sets Host, X-Real-IP, X-Forwarded-For/Proto, Upgrade and
+    # Connection \$connection_upgrade - setting them again duplicates the headers.
     location / {
         include /config/nginx/proxy.conf;
         include /config/nginx/resolver.conf;
 
-        set \$upstream_app OpenCloud;
+        set \$upstream_app ${OC_UPSTREAM};
         set \$upstream_port 9200;
         set \$upstream_proto http;
         proxy_pass \$upstream_proto://\$upstream_app:\$upstream_port;
-
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection \$connection_upgrade;
     }
 }"
     write_swag_conf "${OC_CONF_NAME}" "${OC_CONF_CONTENT}" "${OVERWRITE_SWAG_OPENCLOUD}"
@@ -868,7 +961,43 @@ server {
         WO_CONF_NAME="${WO_SUB}.subdomain.conf"
         WO_CONTAINER="Collabora"; WO_PORT="9980"
         [ "${ENABLE_EURO_OFFICE}" = "true" ] && { WO_CONTAINER="Euro-Office"; WO_PORT="80"; }
+        WO_UPSTREAM="${SWAG_UPSTREAM_HOST:-${WO_CONTAINER}}"
+        WO_WS_BLOCK=""
+        if [ "${ENABLE_COLLABORA}" = "true" ]; then
+            WO_WS_BLOCK="
+    # Collabora document socket
+    location ~ ^/cool/(.*)/ws\$ {
+        include /config/nginx/proxy.conf;
+        include /config/nginx/resolver.conf;
+
+        set \$upstream_app ${WO_UPSTREAM};
+        set \$upstream_port ${WO_PORT};
+        set \$upstream_proto http;
+        proxy_pass \$upstream_proto://\$upstream_app:\$upstream_port;
+
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \"upgrade\";
+        proxy_read_timeout 36000s;
+    }
+
+    # Collabora admin console socket
+    location ^~ /cool/adminws {
+        include /config/nginx/proxy.conf;
+        include /config/nginx/resolver.conf;
+
+        set \$upstream_app ${WO_UPSTREAM};
+        set \$upstream_port ${WO_PORT};
+        set \$upstream_proto http;
+        proxy_pass \$upstream_proto://\$upstream_app:\$upstream_port;
+
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \"upgrade\";
+        proxy_read_timeout 36000s;
+    }
+"
+        fi
         WO_CONF_CONTENT="## ${WEBOFFICE_NAME} for OpenCloud 7.5+ - generated ${TS}
+## Upstream '${WO_UPSTREAM}' - share the Docker network, or set SWAG_UPSTREAM_HOST.
 server {
     listen 443 ssl;
     listen [::]:443 ssl;
@@ -879,23 +1008,15 @@ server {
     include /config/nginx/ssl.conf;
 
     client_max_body_size 100M;
-
+${WO_WS_BLOCK}
     location / {
         include /config/nginx/proxy.conf;
         include /config/nginx/resolver.conf;
 
-        set \$upstream_app ${WO_CONTAINER};
+        set \$upstream_app ${WO_UPSTREAM};
         set \$upstream_port ${WO_PORT};
         set \$upstream_proto http;
         proxy_pass \$upstream_proto://\$upstream_app:\$upstream_port;
-
-        proxy_set_header Host \$host;
-        proxy_set_header X-Forwarded-Host \$host;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection \"upgrade\";
-        proxy_read_timeout 3600s;
     }
 }"
         write_swag_conf "${WO_CONF_NAME}" "${WO_CONF_CONTENT}" "${OVERWRITE_SWAG_WEBOFFICE}"
@@ -917,7 +1038,7 @@ say " Setup complete"
 say "============================================================"
 say ""
 say " Templates in ${TEMPLATE_DIR}:"
-for t in my-OpenCloud.xml my-Collabora.xml my-Euro-Office.xml my-Radicale.xml my-Pocket-ID.xml; do
+for t in my-OpenCloud.xml my-Collabora.xml my-Euro-Office.xml my-Radicale.xml my-Pocket-ID.xml my-YJS.xml; do
     [ -f "${TEMPLATE_DIR}/${t}" ] && say "   ${t}"
     [ -f "${TEMPLATE_DIR}/${t}.new" ] && say "   ${t}.new   (existing template kept - compare and rename manually)"
 done
@@ -947,6 +1068,10 @@ if [ -n "${WEBOFFICE_DOMAIN}" ]; then
 fi
 say "   ${n}. OpenCloud"
 n=$((n+1))
+if [ "${ENABLE_YJS}" = "true" ]; then
+    say "   ${n}. ${YJS_CONTAINER}   (collaborative editing - can also start before OpenCloud)"
+    n=$((n+1))
+fi
 [ "${ENABLE_RADICALE}" = "true" ] && say "   ${n}. Radicale"
 say ""
 say " In Unraid: Docker -> Add Container -> pick the template under"
