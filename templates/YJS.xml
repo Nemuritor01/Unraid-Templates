@@ -1,1 +1,27 @@
-
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>YJS</Name>
+  <Repository>opencloudeu/yjs:1.0.0</Repository>
+  <Registry>https://hub.docker.com/r/opencloudeu/yjs</Registry>
+  <Network>opencloud-net</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/opencloud-eu/web/issues</Support>
+  <Project>https://github.com/opencloud-eu/web</Project>
+  <Overview>Yjs relay for real-time collaborative editing in the OpenCloud Editor.&#13;&#10;&#13;&#10;It is a pure WebSocket relay: it stores no content and needs no appdata folder.&#13;&#10;&#13;&#10;OpenCloud reaches it through the proxy.yaml route /yjs -&gt; http://YJS:1234, browsers through the reverse proxy at https://opencloud.yourdomain.com/yjs. It can be created any time and does not block the OpenCloud start.&#13;&#10;&#13;&#10;Only Markdown and .ocnote files support collaboration.</Overview>
+  <Category>Productivity: Tools:</Category>
+  <WebUI/>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/Nemuritor01/Unraid-Templates/refs/heads/main/templates/docker-icons/opencloud.png</Icon>
+  <ExtraParams>--stop-timeout=20 --user=1000:1000</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires>Needs the OpenCloud container on the same Docker network, with the /yjs route in its proxy.yaml.</Requires>
+  <Config Name="OpenCloud URL" Target="OPENCLOUD_URL" Default="http://OpenCloud:9200" Mode="" Description="Internal URL the relay uses to reach OpenCloud" Type="Variable" Display="always" Required="true" Mask="false">http://OpenCloud:9200</Config>
+  <Config Name="PORT" Target="PORT" Default="1234" Mode="" Description="Internal listen port, not published. Must match the /yjs route in proxy.yaml." Type="Variable" Display="always" Required="true" Mask="false">1234</Config>
+  <Config Name="SHUTDOWN_GRACE_PERIOD_MS" Target="SHUTDOWN_GRACE_PERIOD_MS" Default="15000" Mode="" Description="Graceful shutdown grace period in milliseconds" Type="Variable" Display="advanced" Required="false" Mask="false">15000</Config>
+  <TailscaleStateDir/>
+</Container>
